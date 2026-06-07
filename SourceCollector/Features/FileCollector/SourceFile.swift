@@ -8,13 +8,13 @@
 import Foundation
 
 struct SourceFile: Identifiable, Hashable {
-    let id = UUID()
+
+    var id: String {
+        url.path
+    }
+
     let url: URL
     let name: String
-
-    var content: String {
-        (try? String(contentsOf: url)) ?? ""
-    }
 
     func relativePath(from root: String) -> String {
         let rootURL = URL(fileURLWithPath: root).standardizedFileURL

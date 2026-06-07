@@ -9,6 +9,20 @@ import Foundation
 import AppKit
 import Combine
 
+// MARK: - File content abstraction
+
+protocol FileContentService {
+    func readFile(at url: URL) -> String
+}
+
+// MARK: - Default implementation
+
+final class DefaultFileContentService: FileContentService {
+    func readFile(at url: URL) -> String {
+        (try? String(contentsOf: url)) ?? ""
+    }
+}
+
 @MainActor
 final class FilesViewModel: ObservableObject {
 
@@ -31,9 +45,14 @@ final class FilesViewModel: ObservableObject {
 
     // MARK: - Dependencies
     private let scanner: FileScanningService
+    private let contentService: FileContentService
 
-    init(scanner: FileScanningService = DefaultFileScanningService()) {
+    init(
+        scanner: FileScanningService = DefaultFileScanningService(),
+        contentService: FileContentService = DefaultFileContentService()
+    ) {
         self.scanner = scanner
+        self.contentService = contentService
         self.enabledExtensions = Set(supportedExtensions)
     }
 
@@ -67,12 +86,14 @@ final class FilesViewModel: ObservableObject {
         let combined = selectedFiles
             .sorted { $0.name < $1.name }
             .map { file in
+
+                let content = contentService.readFile(at: file.url)
                 let relativePath = file.relativePath(from: projectPath)
 
                 return """
                 // MARK: - \(relativePath)
 
-                \(file.content)
+                \(content)
                 """
             }
             .joined(separator: "\n\n")
