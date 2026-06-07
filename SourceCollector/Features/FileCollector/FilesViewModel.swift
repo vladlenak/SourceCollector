@@ -16,15 +16,22 @@ final class FilesViewModel: ObservableObject {
     @Published var files: [SourceFile] = []
     @Published var selectedFiles: Set<SourceFile> = []
 
-    // MARK: - Supported languages (extendable)
-    private let supportedExtensions: Set<String> = [
+    // MARK: - Supported file types
+    let supportedExtensions: [String] = [
         "swift",
-        "kt",     // Kotlin
+        "kt",
         "java",
         "dart",
         "js",
         "ts"
     ]
+
+    // MARK: - Enabled filters (default = all ON)
+    @Published var enabledExtensions: Set<String>
+
+    init() {
+        self.enabledExtensions = Set(supportedExtensions)
+    }
 
     func openFolderPicker() {
         let panel = NSOpenPanel()
@@ -53,7 +60,7 @@ final class FilesViewModel: ObservableObject {
         var result: [SourceFile] = []
 
         while let fileURL = enumerator?.nextObject() as? URL {
-            guard supportedExtensions.contains(fileURL.pathExtension) else {
+            guard enabledExtensions.contains(fileURL.pathExtension) else {
                 continue
             }
 

@@ -12,8 +12,9 @@ struct ContentView: View {
     @StateObject private var vm = FilesViewModel()
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
 
+            // MARK: - Top controls
             HStack {
                 TextField("Path to project", text: $vm.projectPath)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -27,11 +28,44 @@ struct ContentView: View {
                 }
             }
 
+            // MARK: - File type filters
+            VStack(alignment: .leading, spacing: 8) {
+                Text("File Types")
+                    .font(.headline)
+
+                LazyVGrid(
+                    columns: [
+                        GridItem(.adaptive(minimum: 80), spacing: 8)
+                    ],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    ForEach(vm.supportedExtensions, id: \.self) { ext in
+                        Toggle(
+                            ext,
+                            isOn: Binding(
+                                get: { vm.enabledExtensions.contains(ext) },
+                                set: { isOn in
+                                    if isOn {
+                                        vm.enabledExtensions.insert(ext)
+                                    } else {
+                                        vm.enabledExtensions.remove(ext)
+                                    }
+                                }
+                            )
+                        )
+                        .toggleStyle(.checkbox)
+                    }
+                }
+            }
+
+            // MARK: - File list
             List(vm.files, id: \.self, selection: $vm.selectedFiles) { file in
                 Text(file.name)
             }
-            .frame(minHeight: 400)
+            .frame(maxHeight: .infinity)
 
+            // MARK: - Actions
             HStack {
                 Button("Select All") {
                     vm.selectAllFiles()
@@ -44,7 +78,7 @@ struct ContentView: View {
             }
         }
         .padding(24)
-        .frame(width: 700, height: 500)
+        .frame(width: 700, height: 500, alignment: .topLeading)
     }
 }
 
