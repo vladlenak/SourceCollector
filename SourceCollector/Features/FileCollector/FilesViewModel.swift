@@ -29,7 +29,11 @@ final class FilesViewModel: ObservableObject {
     // MARK: - Enabled filters (default = all ON)
     @Published var enabledExtensions: Set<String>
 
-    init() {
+    // MARK: - Dependencies
+    private let scanner: FileScanningService
+
+    init(scanner: FileScanningService = DefaultFileScanningService()) {
+        self.scanner = scanner
         self.enabledExtensions = Set(supportedExtensions)
     }
 
@@ -52,27 +56,11 @@ final class FilesViewModel: ObservableObject {
         let url = URL(fileURLWithPath: projectPath)
         guard FileManager.default.fileExists(atPath: url.path) else { return }
 
-        let enumerator = FileManager.default.enumerator(
+        files = scanner.scanFiles(
             at: url,
-            includingPropertiesForKeys: nil
+            allowedExtensions: enabledExtensions
         )
-
-        var result: [SourceFile] = []
-
-        while let fileURL = enumerator?.nextObject() as? URL {
-            guard enabledExtensions.contains(fileURL.pathExtension) else {
-                continue
-            }
-
-            let file = SourceFile(
-                url: fileURL,
-                name: fileURL.lastPathComponent
-            )
-
-            result.append(file)
-        }
-
-        files = result.sorted { $0.name < $1.name }
+        .sorted { $0.name < $1.name }
     }
 
     func copySelected() {
