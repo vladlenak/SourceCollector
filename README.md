@@ -6,6 +6,7 @@ SourceCollector is a simple macOS application for collecting source code from pr
 
 - Select a project folder via Finder
 - Recursive file scanning
+- Filter files by programming language (enable/disable extensions)
 - Support for popular programming languages:
   - Swift
   - Kotlin
