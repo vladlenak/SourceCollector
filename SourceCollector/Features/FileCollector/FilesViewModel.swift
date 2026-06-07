@@ -6,22 +6,7 @@
 //
 
 import Foundation
-import AppKit
 import Combine
-
-// MARK: - File content abstraction
-
-protocol FileContentService {
-    func readFile(at url: URL) -> String
-}
-
-// MARK: - Default implementation
-
-final class DefaultFileContentService: FileContentService {
-    func readFile(at url: URL) -> String {
-        (try? String(contentsOf: url)) ?? ""
-    }
-}
 
 @MainActor
 final class FilesViewModel: ObservableObject {
@@ -40,35 +25,32 @@ final class FilesViewModel: ObservableObject {
         "ts"
     ]
 
-    // MARK: - Enabled filters (default = all ON)
+    // MARK: - Enabled filters
     @Published var enabledExtensions: Set<String>
 
     // MARK: - Dependencies
     private let scanner: FileScanningService
     private let contentService: FileContentService
+    private let folderPicker: FolderPickingService
+    private let clipboard: ClipboardService
 
     init(
         scanner: FileScanningService = DefaultFileScanningService(),
-        contentService: FileContentService = DefaultFileContentService()
+        contentService: FileContentService,
+        folderPicker: FolderPickingService,
+        clipboard: ClipboardService
     ) {
         self.scanner = scanner
         self.contentService = contentService
+        self.folderPicker = folderPicker
+        self.clipboard = clipboard
         self.enabledExtensions = Set(supportedExtensions)
     }
 
     func openFolderPicker() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Select"
-
-        if panel.runModal() == .OK {
-            if let url = panel.url {
-                projectPath = url.path
-                loadFiles()
-            }
-        }
+        guard let url = folderPicker.pickFolder() else { return }
+        projectPath = url.path
+        loadFiles()
     }
 
     func loadFiles() {
@@ -98,8 +80,7 @@ final class FilesViewModel: ObservableObject {
             }
             .joined(separator: "\n\n")
 
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(combined, forType: .string)
+        clipboard.copy(combined)
     }
 
     func selectAllFiles() {

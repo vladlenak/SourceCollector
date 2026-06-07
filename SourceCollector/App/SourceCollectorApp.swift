@@ -9,9 +9,19 @@ import SwiftUI
 
 @main
 struct SourceCollectorApp: App {
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(vm: makeViewModel())
         }
+    }
+
+    private func makeViewModel() -> FilesViewModel {
+        FilesViewModel(
+            scanner: DefaultFileScanningService(),
+            contentService: DefaultFileContentService(),
+            folderPicker: DefaultFolderPickingService(),
+            clipboard: DefaultClipboardService()
+        )
     }
 }

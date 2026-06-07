@@ -9,7 +9,11 @@ import SwiftUI
 
 struct ContentView: View {
 
-    @StateObject private var vm = FilesViewModel()
+    @StateObject private var vm: FilesViewModel
+
+    init(vm: FilesViewModel) {
+        _vm = StateObject(wrappedValue: vm)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -83,5 +87,10 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(vm: FilesViewModel(
+        scanner: DefaultFileScanningService(),
+        contentService: DefaultFileContentService(),
+        folderPicker: DefaultFolderPickingService(),
+        clipboard: DefaultClipboardService()
+    ))
 }
