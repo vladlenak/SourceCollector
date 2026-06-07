@@ -88,9 +88,12 @@ struct ContentView: View {
 
 #Preview {
     ContentView(vm: FilesViewModel(
-        scanner: DefaultFileScanningService(),
+        scanner: DefaultFileScanningService(
+            fileSystem: DefaultFileSystemService()
+        ),
         contentService: DefaultFileContentService(),
         folderPicker: DefaultFolderPickingService(),
-        clipboard: DefaultClipboardService()
+        clipboard: DefaultClipboardService(),
+        fileSystem: DefaultFileSystemService()
     ))
 }

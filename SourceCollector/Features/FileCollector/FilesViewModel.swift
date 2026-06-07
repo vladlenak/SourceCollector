@@ -15,7 +15,6 @@ final class FilesViewModel: ObservableObject {
     @Published var files: [SourceFile] = []
     @Published var selectedFiles: Set<SourceFile> = []
 
-    // MARK: - Supported file types
     let supportedExtensions: [String] = [
         "swift",
         "kt",
@@ -25,7 +24,6 @@ final class FilesViewModel: ObservableObject {
         "ts"
     ]
 
-    // MARK: - Enabled filters
     @Published var enabledExtensions: Set<String>
 
     // MARK: - Dependencies
@@ -33,17 +31,20 @@ final class FilesViewModel: ObservableObject {
     private let contentService: FileContentService
     private let folderPicker: FolderPickingService
     private let clipboard: ClipboardService
+    private let fileSystem: FileSystemService
 
     init(
-        scanner: FileScanningService = DefaultFileScanningService(),
+        scanner: FileScanningService,
         contentService: FileContentService,
         folderPicker: FolderPickingService,
-        clipboard: ClipboardService
+        clipboard: ClipboardService,
+        fileSystem: FileSystemService
     ) {
         self.scanner = scanner
         self.contentService = contentService
         self.folderPicker = folderPicker
         self.clipboard = clipboard
+        self.fileSystem = fileSystem
         self.enabledExtensions = Set(supportedExtensions)
     }
 
@@ -55,7 +56,8 @@ final class FilesViewModel: ObservableObject {
 
     func loadFiles() {
         let url = URL(fileURLWithPath: projectPath)
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+
+        guard fileSystem.fileExists(at: url) else { return }
 
         files = scanner.scanFiles(
             at: url,
@@ -65,6 +67,7 @@ final class FilesViewModel: ObservableObject {
     }
 
     func copySelected() {
+
         let combined = selectedFiles
             .sorted { $0.name < $1.name }
             .map { file in

@@ -17,11 +17,19 @@ struct SourceCollectorApp: App {
     }
 
     private func makeViewModel() -> FilesViewModel {
-        FilesViewModel(
-            scanner: DefaultFileScanningService(),
+
+        let fileSystem = DefaultFileSystemService()
+
+        let scanner = DefaultFileScanningService(
+            fileSystem: fileSystem
+        )
+
+        return FilesViewModel(
+            scanner: scanner,
             contentService: DefaultFileContentService(),
             folderPicker: DefaultFolderPickingService(),
-            clipboard: DefaultClipboardService()
+            clipboard: DefaultClipboardService(),
+            fileSystem: fileSystem
         )
     }
 }

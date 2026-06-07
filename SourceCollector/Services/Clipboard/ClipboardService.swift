@@ -8,19 +8,13 @@
 import AppKit
 
 protocol ClipboardService {
-
     func copy(_ string: String)
-
 }
 
 final class DefaultClipboardService: ClipboardService {
 
     func copy(_ string: String) {
-
         NSPasteboard.general.clearContents()
-
         NSPasteboard.general.setString(string, forType: .string)
-
     }
-
 }
