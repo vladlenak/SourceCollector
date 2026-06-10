@@ -16,7 +16,7 @@ final class MockFileSystemService: FileSystemService {
     var enumeratorStub: FileManager.DirectoryEnumerator?
     var fileExistsStub = false
 
-    func enumerator(at url: URL) -> FileManager.DirectoryEnumerator? {
+    func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> FileManager.DirectoryEnumerator? {
         enumeratorStub
     }
 

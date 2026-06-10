@@ -15,11 +15,8 @@ final class DefaultFileSystemService: FileSystemService {
         self.fileManager = fileManager
     }
 
-    func enumerator(at url: URL) -> FileManager.DirectoryEnumerator? {
-        fileManager.enumerator(
-            at: url,
-            includingPropertiesForKeys: nil
-        )
+    func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> FileManager.DirectoryEnumerator? {
+        fileManager.enumerator(at: url, includingPropertiesForKeys: nil, options: options)
     }
 
     func fileExists(at url: URL) -> Bool {

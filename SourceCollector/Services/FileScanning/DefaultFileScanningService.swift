@@ -16,22 +16,15 @@ final class DefaultFileScanningService: FileScanningService {
     }
 
     func scanFiles(at url: URL, allowedExtensions: Set<String>) -> [SourceFile] {
-
-        let enumerator = fileSystem.enumerator(at: url)
+        let enumerator = fileSystem.enumerator(at: url, options: [.skipsHiddenFiles])
 
         var result: [SourceFile] = []
 
         while let fileURL = enumerator?.nextObject() as? URL {
-
-            guard allowedExtensions.contains(fileURL.pathExtension) else {
-                continue
-            }
+            guard allowedExtensions.contains(fileURL.pathExtension) else { continue }
 
             result.append(
-                SourceFile(
-                    url: fileURL,
-                    name: fileURL.lastPathComponent
-                )
+                SourceFile(url: fileURL, name: fileURL.lastPathComponent)
             )
         }
 

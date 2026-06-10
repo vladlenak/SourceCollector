@@ -32,13 +32,22 @@ SourceCollector is a simple macOS application for collecting source code from pr
 SourceCollector/
 ├── App/
 │   └── SourceCollectorApp.swift
+├── Domain/
+│   ├── RecentProject.swift
+│   └── SourceFile.swift
 ├── Features/
 │   └── FileCollector/
 │       ├── ContentView.swift
-│       ├── FilesViewModel.swift
-│       └── SourceFile.swift
-├── Tests/
-└── UITests/
+│       └── FilesViewModel.swift
+├── Services/
+│   ├── Clipboard/
+│   ├── FileContent/
+│   ├── FileScanning/
+│   ├── FileSystem/
+│   ├── FolderPicking/
+│   └── RecentProjects/
+├── SourceCollectorTests/
+└── SourceCollectorUITests/
 ```
 
 ## 🚀 Installation & Run

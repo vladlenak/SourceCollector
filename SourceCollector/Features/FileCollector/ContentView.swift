@@ -72,7 +72,7 @@ struct ContentView: View {
             }
         }
         .onChange(of: vm.selectedRecentProject) { _, newValue in
-            if let path = newValue {
+            if let path = newValue, path != vm.projectPath {
                 vm.openProject(path: path)
             }
         }

@@ -1,0 +1,10 @@
+*.xcuserdata
+*.xcuserstate
+*.xcbkptlist
+*.xcworkspace/xcuserdata
+DerivedData/
+.build/
+build/
+.DS_Store
+*.log
+*.xcodeproj/project.xcworkspace/xcshareddata/

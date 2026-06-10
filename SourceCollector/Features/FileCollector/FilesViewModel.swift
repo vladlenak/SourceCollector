@@ -92,22 +92,14 @@ final class FilesViewModel: ObservableObject {
     }
 
     func copySelected() {
-
         let combined = selectedFiles
             .sorted { $0.name < $1.name }
             .map { file in
-
                 let content = contentService.readFile(at: file.url)
                 let relativePath = file.relativePath(from: projectPath)
-
-                return """
-                // MARK: - \(relativePath)
-
-                \(content)
-                """
+                return "// MARK: - \(relativePath)\n\n\(content)"
             }
             .joined(separator: "\n\n")
-
         clipboard.copy(combined)
     }
 
