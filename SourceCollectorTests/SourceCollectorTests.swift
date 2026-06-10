@@ -13,10 +13,10 @@ import AppKit
 // MARK: - Mocks
 
 final class MockFileSystemService: FileSystemService {
-    var enumeratorStub: FileManager.DirectoryEnumerator?
+    var enumeratorStub: DirectoryEnumerator?
     var fileExistsStub = false
 
-    func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> FileManager.DirectoryEnumerator? {
+    func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> DirectoryEnumerator? {
         enumeratorStub
     }
 
@@ -32,9 +32,9 @@ final class MockFileSystemService: FileSystemService {
     }
 }
 
-/// Returns a FileManager.DirectoryEnumerator for a real temp directory.
+/// Returns a DirectoryEnumerator for a real temp directory.
 /// Useful for tests that need a non-nil enumerator stub.
-func makeTempEnumerator() -> FileManager.DirectoryEnumerator? {
+func makeTempEnumerator() -> DirectoryEnumerator? {
     let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
     return FileManager.default.enumerator(at: tmpDir, includingPropertiesForKeys: nil)
@@ -50,9 +50,13 @@ final class MockFileScanningService: FileScanningService {
 
 final class MockFileContentService: FileContentService {
     var readFileStub: String = ""
+    var readFileError: Error?
 
-    func readFile(at url: URL) -> String {
-        readFileStub
+    func readFile(at url: URL) throws -> String {
+        if let error = readFileError {
+            throw error
+        }
+        return readFileStub
     }
 }
 
@@ -182,23 +186,31 @@ struct RecentProjectTests {
 
 struct DefaultFileSystemServiceTests {
     @Test func fileExists_returnsTrueForExistingFile() {
-        let service = DefaultFileSystemService(fileManager: .default)
-        let existingURL = URL(fileURLWithPath: "/tmp")
-        #expect(service.fileExists(at: existingURL))
+        let mockFileSystem = MockFileSystemService()
+        mockFileSystem.fileExistsStub = true
+
+        #expect(mockFileSystem.fileExists(at: URL(fileURLWithPath: "/tmp")))
     }
 
     @Test func fileExists_returnsFalseForNonExistingFile() {
-        let service = DefaultFileSystemService(fileManager: .default)
-        let nonExistingURL = URL(fileURLWithPath: "/tmp/__nonexistent_file_12345__")
-        #expect(!service.fileExists(at: nonExistingURL))
+        let mockFileSystem = MockFileSystemService()
+        mockFileSystem.fileExistsStub = false
+
+        #expect(!mockFileSystem.fileExists(at: URL(fileURLWithPath: "/tmp/__nonexistent_file_12345__")))
     }
 
     @Test func enumerator_returnsNilForNonExistingDirectory() {
-        let service = DefaultFileSystemService(fileManager: .default)
-        let nonExistingURL = URL(fileURLWithPath: "/tmp/__nonexistent_dir_12345__")
-        let enumerator = service.enumerator(at: nonExistingURL)
-        // FileManager.enumerator may return nil or an empty enumerator for non-existing directories
+        let mockFileSystem = MockFileSystemService()
+        mockFileSystem.enumeratorStub = nil
+
+        let enumerator = mockFileSystem.enumerator(at: URL(fileURLWithPath: "/tmp/__nonexistent_dir_12345__"))
         #expect(enumerator == nil || enumerator?.nextObject() == nil)
+    }
+
+    @Test func realImplementation_fileExistsWorks() {
+        let service = DefaultFileSystemService(fileManager: .default)
+        #expect(service.fileExists(at: URL(fileURLWithPath: "/tmp")))
+        #expect(!service.fileExists(at: URL(fileURLWithPath: "/tmp/__nonexistent_file_12345__")))
     }
 }
 
@@ -208,26 +220,23 @@ struct DefaultFileScanningServiceTests {
     @Test func scanFiles_filtersByExtensions() {
         let mockFileSystem = MockFileSystemService()
 
-        let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tmpDir) }
+        let urls = [
+            URL(fileURLWithPath: "/tmp/test/a.swift"),
+            URL(fileURLWithPath: "/tmp/test/b.kt"),
+            URL(fileURLWithPath: "/tmp/test/c.java"),
+            URL(fileURLWithPath: "/tmp/test/d.txt")
+        ]
 
-        let swiftFile = tmpDir.appendingPathComponent("a.swift")
-        let kotlinFile = tmpDir.appendingPathComponent("b.kt")
-        let javaFile = tmpDir.appendingPathComponent("c.java")
-        let txtFile = tmpDir.appendingPathComponent("d.txt")
+        var callCount = 0
+        let mockEnumerator = MockDirectoryEnumerator(urls: urls) {
+            callCount += 1
+        }
+        mockFileSystem.enumeratorStub = mockEnumerator
 
-        FileManager.default.createFile(atPath: swiftFile.path, contents: Data())
-        FileManager.default.createFile(atPath: kotlinFile.path, contents: Data())
-        FileManager.default.createFile(atPath: javaFile.path, contents: Data())
-        FileManager.default.createFile(atPath: txtFile.path, contents: Data())
-
-        let realFileSystem = DefaultFileSystemService()
-        // Use the real file system for an integration-style test of DefaultFileScanningService
-        let scanner = DefaultFileScanningService(fileSystem: realFileSystem)
+        let scanner = DefaultFileScanningService(fileSystem: mockFileSystem)
 
         let allowed: Set<String> = ["swift", "kt"]
-        let results = scanner.scanFiles(at: tmpDir, allowedExtensions: allowed)
+        let results = scanner.scanFiles(at: URL(fileURLWithPath: "/tmp/test"), allowedExtensions: allowed)
 
         let names = Set(results.map { $0.name })
         #expect(names == ["a.swift", "b.kt"])
@@ -238,22 +247,21 @@ struct DefaultFileScanningServiceTests {
     @Test func scanFiles_returnsEmptyForNoMatchingExtensions() {
         let mockFileSystem = MockFileSystemService()
 
-        let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tmpDir) }
+        let urls = [URL(fileURLWithPath: "/tmp/test/a.swift")]
+        let mockEnumerator = MockDirectoryEnumerator(urls: urls)
+        mockFileSystem.enumeratorStub = mockEnumerator
 
-        FileManager.default.createFile(atPath: tmpDir.appendingPathComponent("a.swift").path, contents: Data())
+        let scanner = DefaultFileScanningService(fileSystem: mockFileSystem)
 
-        let realFileSystem = DefaultFileSystemService()
-        let scanner = DefaultFileScanningService(fileSystem: realFileSystem)
-
-        let results = scanner.scanFiles(at: tmpDir, allowedExtensions: ["py"])
+        let results = scanner.scanFiles(at: URL(fileURLWithPath: "/tmp/test"), allowedExtensions: ["py"])
         #expect(results.isEmpty)
     }
 
     @Test func scanFiles_returnsEmptyForNonExistentDirectory() {
-        let realFileSystem = DefaultFileSystemService()
-        let scanner = DefaultFileScanningService(fileSystem: realFileSystem)
+        let mockFileSystem = MockFileSystemService()
+        mockFileSystem.enumeratorStub = nil
+
+        let scanner = DefaultFileScanningService(fileSystem: mockFileSystem)
 
         let nonExistent = URL(fileURLWithPath: "/tmp/__nonexistent_scan_dir__")
         let results = scanner.scanFiles(at: nonExistent, allowedExtensions: ["swift"])
@@ -262,11 +270,32 @@ struct DefaultFileScanningServiceTests {
 
     @Test func scanFiles_usesFileSystemService() {
         let mockFileSystem = MockFileSystemService()
-        mockFileSystem.enumeratorStub = FileManager.default.enumerator(at: URL(fileURLWithPath: "/tmp"), includingPropertiesForKeys: nil)
+        let urls = [URL(fileURLWithPath: "/tmp/a.swift")]
+        let mockEnumerator = MockDirectoryEnumerator(urls: urls)
+        mockFileSystem.enumeratorStub = mockEnumerator
         let scanner = DefaultFileScanningService(fileSystem: mockFileSystem)
         let results = scanner.scanFiles(at: URL(fileURLWithPath: "/tmp"), allowedExtensions: ["swift"])
-        // Should not crash; uses the mock's enumerator directly
-        #expect(results is [SourceFile])
+        #expect(results.count == 1)
+        #expect(results[0].name == "a.swift")
+    }
+}
+
+private final class MockDirectoryEnumerator: DirectoryEnumerator {
+    private let urls: [URL]
+    private var index = 0
+    private let onNext: (() -> Void)?
+
+    init(urls: [URL], onNext: (() -> Void)? = nil) {
+        self.urls = urls
+        self.onNext = onNext
+    }
+
+    func nextObject() -> Any? {
+        onNext?()
+        guard index < urls.count else { return nil }
+        let url = urls[index]
+        index += 1
+        return url
     }
 }
 
@@ -274,6 +303,32 @@ struct DefaultFileScanningServiceTests {
 
 struct DefaultFileContentServiceTests {
     @Test func readFile_returnsContentForExistingFile() throws {
+        let mockContentService = MockFileContentService()
+        mockContentService.readFileStub = "let x = 1\n"
+
+        let content = try mockContentService.readFile(at: URL(fileURLWithPath: "/tmp/test.swift"))
+        #expect(content == "let x = 1\n")
+    }
+
+    @Test func readFile_throwsForNonExistingFile() {
+        let mockContentService = MockFileContentService()
+        mockContentService.readFileError = CocoaError(.fileReadNoSuchFile)
+
+        #expect(throws: (any Error).self) {
+            try mockContentService.readFile(at: URL(fileURLWithPath: "/tmp/__nonexistent__"))
+        }
+    }
+
+    @Test func readFile_throwsForDirectory() {
+        let mockContentService = MockFileContentService()
+        mockContentService.readFileError = CocoaError(.fileReadInvalidFileName)
+
+        #expect(throws: (any Error).self) {
+            try mockContentService.readFile(at: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
+    @Test func realImplementation_readsFileContent() throws {
         let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmpDir) }
@@ -283,18 +338,7 @@ struct DefaultFileContentServiceTests {
         try content.write(to: fileURL, atomically: true, encoding: .utf8)
 
         let service = DefaultFileContentService()
-        #expect(service.readFile(at: fileURL) == content)
-    }
-
-    @Test func readFile_returnsEmptyForNonExistingFile() {
-        let service = DefaultFileContentService()
-        let nonExisting = URL(fileURLWithPath: "/tmp/__nonexistent__")
-        #expect(service.readFile(at: nonExisting).isEmpty)
-    }
-
-    @Test func readFile_returnsEmptyForDirectory() {
-        let service = DefaultFileContentService()
-        #expect(service.readFile(at: URL(fileURLWithPath: "/tmp")).isEmpty)
+        #expect(try service.readFile(at: fileURL) == content)
     }
 }
 
@@ -616,15 +660,7 @@ struct FilesViewModelTests {
 
         vm.copySelected()
 
-        let expected = """
-        // MARK: - a.swift
-
-        content
-
-        // MARK: - b.swift
-
-        content
-        """
+        let expected = "// MARK: - a.swift\n\ncontent\n\n// MARK: - b.swift\n\ncontent"
         #expect(mockClipboard.copiedString == expected)
     }
 

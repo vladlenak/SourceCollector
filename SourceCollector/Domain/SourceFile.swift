@@ -1,33 +1,30 @@
 //
-//  SourceFile.swift
-//  SourceCollector
-//
-//  Created by Vladlen Akhtemov on 07.06.26.
-//
+ //  SourceFile.swift
+ //  SourceCollector
+ //
+ //  Created by Vladlen Akhtemov on 07.06.26.
+ //
 
-import Foundation
+ import Foundation
 
-struct SourceFile: Identifiable, Hashable {
+ struct SourceFile: Identifiable, Hashable {
 
-    var id: String {
-        url.path
-    }
+     var id: String {
+         url.path
+     }
 
-    let url: URL
-    let name: String
+     let url: URL
+     let name: String
 
-    func relativePath(from root: String) -> String {
-        let rootURL = URL(fileURLWithPath: root).standardizedFileURL
-        let fileURL = url.standardizedFileURL
+     func relativePath(from root: String) -> String {
+         let rootURL = URL(fileURLWithPath: root).standardizedFileURL
+         let fileURL = url.standardizedFileURL
 
-        let rootPath = rootURL.path.hasSuffix("/")
-            ? rootURL.path
-            : rootURL.path + "/"
+         guard fileURL.path.hasPrefix(rootURL.path) else {
+             return fileURL.lastPathComponent
+         }
 
-        if fileURL.path.hasPrefix(rootPath) {
-            return String(fileURL.path.dropFirst(rootPath.count))
-        } else {
-            return fileURL.lastPathComponent
-        }
-    }
-}
+         let relativePath = fileURL.path.dropFirst(rootURL.path.count)
+         return String(relativePath).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+     }
+ }

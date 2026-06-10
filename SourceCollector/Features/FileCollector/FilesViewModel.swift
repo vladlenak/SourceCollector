@@ -82,50 +82,52 @@
          recentProjects = recentProjectsService.recentProjects
      }
 
-     func loadFiles() {
-         let url = URL(fileURLWithPath: projectPath)
+      func loadFiles() {
+          let url = URL(fileURLWithPath: projectPath)
 
-         guard fileSystem.fileExists(at: url) else {
-             errorMessage = "Directory does not exist: \(projectPath)"
-             files = []
-             return
-         }
+          guard fileSystem.fileExists(at: url) else {
+              errorMessage = "Directory does not exist: \(projectPath)"
+              files = []
+              return
+          }
 
-         let project = recentProjects.first { $0.path == projectPath }
-         let hasBookmark = project?.bookmarkData != nil
+          let project = recentProjects.first { $0.path == projectPath }
+          let hasBookmark = project?.bookmarkData != nil
 
-         if hasBookmark {
-             restoreSecurityScopedAccess(for: url, bookmarkData: project!.bookmarkData!)
-         }
+          if hasBookmark {
+              restoreSecurityScopedAccess(for: url, bookmarkData: project!.bookmarkData!)
+          }
 
-         guard fileSystem.enumerator(at: url) != nil else {
-             if hasBookmark {
-                 url.stopAccessingSecurityScopedResource()
-             }
-             errorMessage = "Cannot read directory contents. Use 'Choose Folder' to grant access."
-             files = []
-             return
-         }
+          guard fileSystem.enumerator(at: url) != nil else {
+              if hasBookmark {
+                  url.stopAccessingSecurityScopedResource()
+              }
+              errorMessage = "Cannot read directory contents. Use 'Choose Folder' to grant access."
+              files = []
+              return
+          }
 
-         isLoading = true
-         errorMessage = nil
+          isLoading = true
+          errorMessage = nil
 
-         files = scanner.scanFiles(
-             at: url,
-             allowedExtensions: enabledExtensions
-         )
-         .sorted { $0.name < $1.name }
+          let scannedFiles = scanner.scanFiles(
+              at: url,
+              allowedExtensions: enabledExtensions
+          )
+          .sorted { $0.name < $1.name }
 
-         isLoading = false
+          isLoading = false
 
-         if hasBookmark {
-             url.stopAccessingSecurityScopedResource()
-         }
+          files = scannedFiles
 
-         if files.isEmpty {
-             errorMessage = "No source files found for selected extensions"
-         }
-     }
+          if hasBookmark {
+              url.stopAccessingSecurityScopedResource()
+          }
+
+          if files.isEmpty {
+              errorMessage = "No source files found for selected extensions"
+          }
+      }
 
      private func restoreSecurityScopedAccess(for url: URL, bookmarkData: Data) {
          var isStale = false
@@ -145,17 +147,20 @@
          _ = resolvedURL.startAccessingSecurityScopedResource()
      }
 
-     func copySelected() {
-         let combined = selectedFiles
-             .sorted { $0.name < $1.name }
-             .map { file in
-                 let content = contentService.readFile(at: file.url)
-                 let relativePath = file.relativePath(from: projectPath)
-                 return "// MARK: - \(relativePath)\n\n\(content)"
-             }
-             .joined(separator: "\n\n")
-         clipboard.copy(combined)
-     }
+      func copySelected() {
+          var combined = ""
+          for file in selectedFiles.sorted(by: { $0.name < $1.name }) {
+              let content: String
+              do {
+                  content = try contentService.readFile(at: file.url)
+              } catch {
+                  content = "// Error reading file: \(error.localizedDescription)"
+              }
+              let relativePath = file.relativePath(from: projectPath)
+              combined += "// MARK: - \(relativePath)\n\n\(content)\n\n"
+          }
+          clipboard.copy(combined.trimmingCharacters(in: .whitespacesAndNewlines))
+      }
 
      func selectAllFiles() {
          selectedFiles = Set(files)

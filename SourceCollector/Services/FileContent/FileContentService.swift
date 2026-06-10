@@ -9,6 +9,6 @@ import Foundation
 
 protocol FileContentService {
 
-    func readFile(at url: URL) -> String
+    func readFile(at url: URL) throws -> String
 
 }

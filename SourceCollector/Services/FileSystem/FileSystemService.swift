@@ -7,10 +7,14 @@
 
  import Foundation
 
+ protocol DirectoryEnumerator {
+     func nextObject() -> Any?
+ }
+
  protocol FileSystemService {
 
-     func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> FileManager.DirectoryEnumerator?
-     func enumerator(at url: URL) -> FileManager.DirectoryEnumerator?
+     func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> DirectoryEnumerator?
+     func enumerator(at url: URL) -> DirectoryEnumerator?
 
      func fileExists(at url: URL) -> Bool
 
@@ -19,7 +23,9 @@
  }
 
  extension FileSystemService {
-     func enumerator(at url: URL) -> FileManager.DirectoryEnumerator? {
+     func enumerator(at url: URL) -> DirectoryEnumerator? {
          enumerator(at: url, options: [])
      }
  }
+
+ extension FileManager.DirectoryEnumerator: DirectoryEnumerator {}

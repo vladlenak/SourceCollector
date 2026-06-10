@@ -1,36 +1,55 @@
 //
-//  SourceCollectorApp.swift
-//  SourceCollector
-//
-//  Created by Vladlen Akhtemov on 07.06.26.
-//
+ //  SourceCollectorApp.swift
+ //  SourceCollector
+ //
+ //  Created by Vladlen Akhtemov on 07.06.26.
+ //
 
-import SwiftUI
+ import SwiftUI
+ import Combine
 
-@main
-struct SourceCollectorApp: App {
+ @MainActor
+ final class AppDependencies: ObservableObject {
+     let fileSystem: FileSystemService
+     let scanner: FileScanningService
+     let projectViewModel: ProjectViewModel
+     let fileScannerViewModel: FileScannerViewModel
+     let fileSelectionViewModel: FileSelectionViewModel
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView(vm: makeViewModel())
-        }
-    }
+     init() {
+         let fs = DefaultFileSystemService()
+         let sc = DefaultFileScanningService(fileSystem: fs)
+         let pvm = ProjectViewModel(
+             folderPicker: DefaultFolderPickingService(),
+             fileSystem: fs,
+             recentProjectsService: DefaultRecentProjectsService()
+         )
+         let fsvm = FileScannerViewModel(scanner: sc, projectViewModel: pvm)
+         let selv = FileSelectionViewModel(
+             contentService: DefaultFileContentService(),
+             clipboard: DefaultClipboardService(),
+             fileScannerViewModel: fsvm
+         )
+         self.fileSystem = fs
+         self.scanner = sc
+         self.projectViewModel = pvm
+         self.fileScannerViewModel = fsvm
+         self.fileSelectionViewModel = selv
+     }
+ }
 
-    private func makeViewModel() -> FilesViewModel {
+ @main
+ struct SourceCollectorApp: App {
 
-        let fileSystem = DefaultFileSystemService()
+     @StateObject private var dependencies = AppDependencies()
 
-        let scanner = DefaultFileScanningService(
-            fileSystem: fileSystem
-        )
-
-        return FilesViewModel(
-            scanner: scanner,
-            contentService: DefaultFileContentService(),
-            folderPicker: DefaultFolderPickingService(),
-            clipboard: DefaultClipboardService(),
-            fileSystem: fileSystem,
-            recentProjectsService: DefaultRecentProjectsService()
-        )
-    }
-}
+     var body: some Scene {
+         WindowGroup {
+             ContentView(
+                 projectViewModel: dependencies.projectViewModel,
+                 fileScannerViewModel: dependencies.fileScannerViewModel,
+                 fileSelectionViewModel: dependencies.fileSelectionViewModel
+             )
+         }
+     }
+ }

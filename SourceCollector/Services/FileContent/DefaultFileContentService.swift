@@ -9,10 +9,8 @@ import Foundation
 
 final class DefaultFileContentService: FileContentService {
 
-    func readFile(at url: URL) -> String {
-
-        (try? String(contentsOf: url)) ?? ""
-
+    func readFile(at url: URL) throws -> String {
+        try String(contentsOf: url)
     }
 
 }

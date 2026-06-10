@@ -15,9 +15,9 @@
          self.fileManager = fileManager
      }
 
-     func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> FileManager.DirectoryEnumerator? {
-         fileManager.enumerator(at: url, includingPropertiesForKeys: nil, options: options)
-     }
+      func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> DirectoryEnumerator? {
+          fileManager.enumerator(at: url, includingPropertiesForKeys: nil, options: options)
+      }
 
      func fileExists(at url: URL) -> Bool {
          fileManager.fileExists(atPath: url.path)
