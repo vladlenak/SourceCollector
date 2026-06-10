@@ -17,6 +17,7 @@
      func enumerator(at url: URL) -> DirectoryEnumerator?
 
      func fileExists(at url: URL) -> Bool
+     func fileIsDirectory(at url: URL) -> Bool
 
      func startAccessingSecurityScopedResource(for url: URL) -> Bool
      func stopAccessingSecurityScopedResource(for url: URL)

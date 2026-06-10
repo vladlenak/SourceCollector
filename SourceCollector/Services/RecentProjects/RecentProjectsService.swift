@@ -6,6 +6,7 @@
  //
 
  import Foundation
+ import os
 
  protocol RecentProjectsService {
      var recentProjects: [RecentProject] { get }
@@ -53,11 +54,21 @@
          guard let data = userDefaults.data(forKey: userDefaultsKey) else {
              return []
          }
-         return (try? JSONDecoder().decode([RecentProject].self, from: data)) ?? []
+         do {
+             return try JSONDecoder().decode([RecentProject].self, from: data)
+         } catch {
+             os_log("Failed to decode recent projects: %@", type: .error, error.localizedDescription)
+             userDefaults.removeObject(forKey: userDefaultsKey)
+             return []
+         }
      }
 
      private func saveProjects(_ projects: [RecentProject]) {
-         let data = try? JSONEncoder().encode(projects)
-         userDefaults.set(data, forKey: userDefaultsKey)
+         do {
+             let data = try JSONEncoder().encode(projects)
+             userDefaults.set(data, forKey: userDefaultsKey)
+         } catch {
+             os_log("Failed to encode recent projects: %@", type: .error, error.localizedDescription)
+         }
      }
  }

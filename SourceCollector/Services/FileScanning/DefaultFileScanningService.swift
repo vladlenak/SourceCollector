@@ -15,7 +15,7 @@ final class DefaultFileScanningService: FileScanningService {
         self.fileSystem = fileSystem
     }
 
-    func scanFiles(at url: URL, allowedExtensions: Set<String>) -> [SourceFile] {
+    func scanFiles(at url: URL, allowedExtensions: Set<String>) async -> [SourceFile] {
         let enumerator = fileSystem.enumerator(at: url, options: [.skipsHiddenFiles])
 
         var result: [SourceFile] = []

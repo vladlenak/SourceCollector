@@ -23,6 +23,11 @@
          fileManager.fileExists(atPath: url.path)
      }
 
+     func fileIsDirectory(at url: URL) -> Bool {
+         var isDir: ObjCBool = false
+         return fileManager.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
+     }
+
      func startAccessingSecurityScopedResource(for url: URL) -> Bool {
          url.startAccessingSecurityScopedResource()
      }

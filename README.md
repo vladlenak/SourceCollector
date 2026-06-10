@@ -38,7 +38,9 @@ SourceCollector/
 ├── Features/
 │   └── FileCollector/
 │       ├── ContentView.swift
-│       └── FilesViewModel.swift
+│       ├── ProjectViewModel.swift
+│       ├── FileScannerViewModel.swift
+│       └── FileSelectionViewModel.swift
 ├── Services/
 │   ├── Clipboard/
 │   ├── FileContent/
@@ -62,7 +64,7 @@ Then run the project in Xcode (⌘R).
 
 ## 🔧 Requirements
 
-- macOS 13+
+- macOS 14+
 - Xcode 15+
 - Swift 5.9+
 

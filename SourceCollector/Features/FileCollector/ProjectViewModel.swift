@@ -43,10 +43,10 @@ final class ProjectViewModel: ObservableObject {
         recentProjects = recentProjectsService.recentProjects
     }
 
-    func validateProjectPath() -> Bool {
-        let url = URL(fileURLWithPath: projectPath)
-        return fileSystem.fileExists(at: url)
-    }
+     func validateProjectPath() -> Bool {
+         let url = URL(fileURLWithPath: projectPath)
+         return fileSystem.fileIsDirectory(at: url)
+     }
 
     func restoreSecurityScopedAccess(for url: URL, bookmarkData: Data) {
         var isStale = false

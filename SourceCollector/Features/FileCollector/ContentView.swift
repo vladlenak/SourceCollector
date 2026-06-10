@@ -84,13 +84,15 @@ struct ContentView: View {
              }
          }
           .onChange(of: projectViewModel.selectedRecentProject) { _, newValue in
-              if let path = newValue, path != projectViewModel.projectPath {
-                  let project = projectViewModel.recentProjects.first { $0.path == path }
-                  projectViewModel.openProject(path: path, bookmarkData: project?.bookmarkData)
-                  fileScannerViewModel.loadFiles()
+              guard let path = newValue, path != projectViewModel.projectPath else { return }
+              let project = projectViewModel.recentProjects.first { $0.path == path }
+              projectViewModel.openProject(path: path, bookmarkData: project?.bookmarkData)
+              Task {
+                  await fileScannerViewModel.loadFiles()
               }
-              // Reset selection to avoid re-entrancy loop
-              projectViewModel.selectedRecentProject = nil
+              DispatchQueue.main.async {
+                  projectViewModel.selectedRecentProject = nil
+              }
           }
      }
 
@@ -131,7 +133,9 @@ struct ContentView: View {
 
                  Button("Load") {
                      projectViewModel.openProject(path: projectViewModel.projectPath)
-                     fileScannerViewModel.loadFiles()
+                     Task {
+                         await fileScannerViewModel.loadFiles()
+                     }
                  }
                  .accessibilityIdentifier("loadButton")
              }
@@ -159,7 +163,7 @@ struct ContentView: View {
                                      } else {
                                          fileScannerViewModel.enabledExtensions.remove(ext)
                                      }
-                                     fileScannerViewModel.loadFiles()
+                                     Task { await fileScannerViewModel.loadFiles() }
                                  }
                              )
                          )

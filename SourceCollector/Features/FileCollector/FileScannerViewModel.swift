@@ -19,8 +19,12 @@ final class FileScannerViewModel: ObservableObject {
 
     @Published var enabledExtensions: Set<String>
 
-    private let scanner: FileScanningService
-    let projectViewModel: ProjectViewModel
+     private let scanner: FileScanningService
+     let projectViewModel: ProjectViewModel
+
+     var projectPath: String {
+         projectViewModel.projectPath
+     }
 
     init(
         scanner: FileScanningService,
@@ -31,7 +35,7 @@ final class FileScannerViewModel: ObservableObject {
         self.enabledExtensions = Set(supportedExtensions)
     }
 
-    func loadFiles() {
+    func loadFiles() async {
         guard projectViewModel.validateProjectPath() else {
             errorMessage = "Directory does not exist: \(projectViewModel.projectPath)"
             files = []
@@ -40,12 +44,12 @@ final class FileScannerViewModel: ObservableObject {
 
         let url = URL(fileURLWithPath: projectViewModel.projectPath)
 
-        let project = projectViewModel.recentProjects.first { $0.path == projectViewModel.projectPath }
-        let hasBookmark = project?.bookmarkData != nil
+         let project = projectViewModel.recentProjects.first { $0.path == projectViewModel.projectPath }
+         let hasBookmark = project?.bookmarkData != nil
 
-        if hasBookmark {
-            projectViewModel.restoreSecurityScopedAccess(for: url, bookmarkData: project!.bookmarkData!)
-        }
+         if hasBookmark, let bookmarkData = project?.bookmarkData {
+             projectViewModel.restoreSecurityScopedAccess(for: url, bookmarkData: bookmarkData)
+         }
 
         guard projectViewModel.fileSystem.enumerator(at: url) != nil else {
             if hasBookmark {
@@ -59,7 +63,7 @@ final class FileScannerViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        let scannedFiles = scanner.scanFiles(
+        let scannedFiles = await scanner.scanFiles(
             at: url,
             allowedExtensions: enabledExtensions
         )

@@ -20,11 +20,13 @@
          let rootURL = URL(fileURLWithPath: root).standardizedFileURL
          let fileURL = url.standardizedFileURL
 
-         guard fileURL.path.hasPrefix(rootURL.path) else {
+         let rootPath = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
+
+         guard fileURL.path == rootURL.path || fileURL.path.hasPrefix(rootPath) else {
              return fileURL.lastPathComponent
          }
 
-         let relativePath = fileURL.path.dropFirst(rootURL.path.count)
+         let relativePath = fileURL.path.dropFirst(rootPath.count)
          return String(relativePath).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
      }
  }

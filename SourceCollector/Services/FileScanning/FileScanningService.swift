@@ -9,6 +9,6 @@ import Foundation
 
 protocol FileScanningService {
 
-    func scanFiles(at url: URL, allowedExtensions: Set<String>) -> [SourceFile]
+    func scanFiles(at url: URL, allowedExtensions: Set<String>) async -> [SourceFile]
 
 }

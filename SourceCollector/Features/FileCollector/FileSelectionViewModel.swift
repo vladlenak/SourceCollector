@@ -33,7 +33,7 @@ final class FileSelectionViewModel: ObservableObject {
             } catch {
                 content = "// Error reading file: \(error.localizedDescription)"
             }
-            let relativePath = file.relativePath(from: fileScannerViewModel.projectViewModel.projectPath)
+            let relativePath = file.relativePath(from: fileScannerViewModel.projectPath)
             combined += "// MARK: - \(relativePath)\n\n\(content)\n\n"
         }
         clipboard.copy(combined.trimmingCharacters(in: .whitespacesAndNewlines))

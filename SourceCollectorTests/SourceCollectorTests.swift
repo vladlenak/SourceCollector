@@ -15,6 +15,7 @@ import AppKit
 final class MockFileSystemService: FileSystemService {
     var enumeratorStub: DirectoryEnumerator?
     var fileExistsStub = false
+    var fileIsDirectoryStub = false
 
     func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> DirectoryEnumerator? {
         enumeratorStub
@@ -22,6 +23,10 @@ final class MockFileSystemService: FileSystemService {
 
     func fileExists(at url: URL) -> Bool {
         fileExistsStub
+    }
+
+    func fileIsDirectory(at url: URL) -> Bool {
+        fileIsDirectoryStub
     }
 
     func startAccessingSecurityScopedResource(for url: URL) -> Bool {
@@ -43,7 +48,7 @@ func makeTempEnumerator() -> DirectoryEnumerator? {
 final class MockFileScanningService: FileScanningService {
     var scanFilesStub: [SourceFile] = []
 
-    func scanFiles(at url: URL, allowedExtensions: Set<String>) -> [SourceFile] {
+    func scanFiles(at url: URL, allowedExtensions: Set<String>) async -> [SourceFile] {
         scanFilesStub
     }
 }
@@ -124,6 +129,13 @@ struct SourceFileTests {
         let fileURL = URL(fileURLWithPath: "/Users/test/ProjectB/main.swift")
         let file = SourceFile(url: fileURL, name: "main.swift")
         #expect(file.relativePath(from: root) == "main.swift")
+    }
+
+    @Test func relativePath_whenRootIsPrefixOfAnotherDirectory() {
+        let root = "/Users/test/Project"
+        let fileURL = URL(fileURLWithPath: "/Users/test/ProjectBackup/file.swift")
+        let file = SourceFile(url: fileURL, name: "file.swift")
+        #expect(file.relativePath(from: root) == "file.swift")
     }
 
     @Test func relativePath_whenFileIsNestedDeeply() {
@@ -217,7 +229,7 @@ struct DefaultFileSystemServiceTests {
 // MARK: - DefaultFileScanningService Tests
 
 struct DefaultFileScanningServiceTests {
-    @Test func scanFiles_filtersByExtensions() {
+    @Test func scanFiles_filtersByExtensions() async {
         let mockFileSystem = MockFileSystemService()
 
         let urls = [
@@ -236,7 +248,7 @@ struct DefaultFileScanningServiceTests {
         let scanner = DefaultFileScanningService(fileSystem: mockFileSystem)
 
         let allowed: Set<String> = ["swift", "kt"]
-        let results = scanner.scanFiles(at: URL(fileURLWithPath: "/tmp/test"), allowedExtensions: allowed)
+        let results = await scanner.scanFiles(at: URL(fileURLWithPath: "/tmp/test"), allowedExtensions: allowed)
 
         let names = Set(results.map { $0.name })
         #expect(names == ["a.swift", "b.kt"])
@@ -244,7 +256,7 @@ struct DefaultFileScanningServiceTests {
         #expect(!names.contains("d.txt"))
     }
 
-    @Test func scanFiles_returnsEmptyForNoMatchingExtensions() {
+    @Test func scanFiles_returnsEmptyForNoMatchingExtensions() async {
         let mockFileSystem = MockFileSystemService()
 
         let urls = [URL(fileURLWithPath: "/tmp/test/a.swift")]
@@ -253,28 +265,28 @@ struct DefaultFileScanningServiceTests {
 
         let scanner = DefaultFileScanningService(fileSystem: mockFileSystem)
 
-        let results = scanner.scanFiles(at: URL(fileURLWithPath: "/tmp/test"), allowedExtensions: ["py"])
+        let results = await scanner.scanFiles(at: URL(fileURLWithPath: "/tmp/test"), allowedExtensions: ["py"])
         #expect(results.isEmpty)
     }
 
-    @Test func scanFiles_returnsEmptyForNonExistentDirectory() {
+    @Test func scanFiles_returnsEmptyForNonExistentDirectory() async {
         let mockFileSystem = MockFileSystemService()
         mockFileSystem.enumeratorStub = nil
 
         let scanner = DefaultFileScanningService(fileSystem: mockFileSystem)
 
         let nonExistent = URL(fileURLWithPath: "/tmp/__nonexistent_scan_dir__")
-        let results = scanner.scanFiles(at: nonExistent, allowedExtensions: ["swift"])
+        let results = await scanner.scanFiles(at: nonExistent, allowedExtensions: ["swift"])
         #expect(results.isEmpty)
     }
 
-    @Test func scanFiles_usesFileSystemService() {
+    @Test func scanFiles_usesFileSystemService() async {
         let mockFileSystem = MockFileSystemService()
         let urls = [URL(fileURLWithPath: "/tmp/a.swift")]
         let mockEnumerator = MockDirectoryEnumerator(urls: urls)
         mockFileSystem.enumeratorStub = mockEnumerator
         let scanner = DefaultFileScanningService(fileSystem: mockFileSystem)
-        let results = scanner.scanFiles(at: URL(fileURLWithPath: "/tmp"), allowedExtensions: ["swift"])
+        let results = await scanner.scanFiles(at: URL(fileURLWithPath: "/tmp"), allowedExtensions: ["swift"])
         #expect(results.count == 1)
         #expect(results[0].name == "a.swift")
     }
@@ -452,30 +464,23 @@ struct DefaultRecentProjectsServiceTests {
     }
 }
 
-// MARK: - FilesViewModel Tests
+// MARK: - ProjectViewModel Tests
 
 @MainActor
-struct FilesViewModelTests {
+struct ProjectViewModelTests {
     @Test func openFolderPicker_usesFolderPickingService() {
         let mockFolderPicker = MockFolderPickingService()
-        let mockScanner = MockFileScanningService()
-        let mockContent = MockFileContentService()
-        let mockClipboard = MockClipboardService()
         let mockFileSystem = MockFileSystemService()
         let mockRecent = MockRecentProjectsService()
 
-        let vm = FilesViewModel(
-            scanner: mockScanner,
-            contentService: mockContent,
+        let vm = ProjectViewModel(
             folderPicker: mockFolderPicker,
-            clipboard: mockClipboard,
             fileSystem: mockFileSystem,
             recentProjectsService: mockRecent
         )
 
         mockFolderPicker.pickFolderStub = PickedFolder(url: URL(fileURLWithPath: "/tmp/testproj"), bookmarkData: nil)
         mockFileSystem.fileExistsStub = true
-        mockFileSystem.enumeratorStub = makeTempEnumerator()
 
         vm.openFolderPicker()
 
@@ -484,178 +489,317 @@ struct FilesViewModelTests {
 
     @Test func openFolderPicker_whenNil_doesNotChangePath() {
         let mockFolderPicker = MockFolderPickingService()
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: MockFileContentService(),
+        let vm = ProjectViewModel(
             folderPicker: mockFolderPicker,
-            clipboard: MockClipboardService(),
             fileSystem: MockFileSystemService(),
             recentProjectsService: MockRecentProjectsService()
         )
 
         mockFolderPicker.pickFolderStub = nil
         vm.openFolderPicker()
+
         #expect(vm.projectPath == "")
     }
 
-    @Test func openProject_setsPathAndLoadsFiles() {
-        let mockScanner = MockFileScanningService()
-        let mockFileSystem = MockFileSystemService()
+    @Test func openProject_setsPathAndSelectsRecent() {
         let mockRecent = MockRecentProjectsService()
 
-        let vm = FilesViewModel(
-            scanner: mockScanner,
-            contentService: MockFileContentService(),
+        let vm = ProjectViewModel(
             folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: mockFileSystem,
+            fileSystem: MockFileSystemService(),
             recentProjectsService: mockRecent
         )
-
-        mockFileSystem.fileExistsStub = true
-        mockFileSystem.enumeratorStub = FileManager.default.enumerator(at: URL(fileURLWithPath: "/tmp"), includingPropertiesForKeys: nil)
-        let file = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/main.swift"), name: "main.swift")
-        mockScanner.scanFilesStub = [file]
 
         vm.openProject(path: "/tmp/testproj")
 
         #expect(vm.projectPath == "/tmp/testproj")
-        #expect(vm.files == [file])
-        #expect(vm.selectedFiles == [file])
+        #expect(vm.selectedRecentProject == "/tmp/testproj")
     }
 
     @Test func openProject_emptyPath_doesNothing() {
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: MockFileContentService(),
+        let vm = ProjectViewModel(
             folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
             fileSystem: MockFileSystemService(),
             recentProjectsService: MockRecentProjectsService()
         )
 
         vm.openProject(path: "")
+
         #expect(vm.projectPath == "")
     }
 
     @Test func openProject_addsToRecent() {
         let mockRecent = MockRecentProjectsService()
-        let mockFileSystem = MockFileSystemService()
 
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: MockFileContentService(),
+        let vm = ProjectViewModel(
             folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: mockFileSystem,
+            fileSystem: MockFileSystemService(),
             recentProjectsService: mockRecent
         )
 
-        mockFileSystem.fileExistsStub = true
-        mockFileSystem.enumeratorStub = makeTempEnumerator()
         vm.openProject(path: "/tmp/testproj")
 
         #expect(mockRecent.addedPaths.map { $0.0 } == ["/tmp/testproj"])
     }
 
-    @Test func loadFiles_whenPathDoesNotExist_setsErrorAndClearsFiles() {
-        let mockFileSystem = MockFileSystemService()
-        let mockScanner = MockFileScanningService()
+    @Test func removeRecentProject_delegatesToService() {
+        let mockRecent = MockRecentProjectsService()
 
-        let vm = FilesViewModel(
-            scanner: mockScanner,
-            contentService: MockFileContentService(),
+        let vm = ProjectViewModel(
             folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
+            fileSystem: MockFileSystemService(),
+            recentProjectsService: mockRecent
+        )
+
+        vm.removeRecentProject(path: "/tmp/proj")
+
+        #expect(mockRecent.removedPaths == ["/tmp/proj"])
+    }
+
+    @Test func validateProjectPath_returnsTrueWhenIsDirectory() {
+        let mockFileSystem = MockFileSystemService()
+        let vm = ProjectViewModel(
+            folderPicker: MockFolderPickingService(),
             fileSystem: mockFileSystem,
             recentProjectsService: MockRecentProjectsService()
         )
 
-        vm.projectPath = "/tmp/nonexistent"
-        mockFileSystem.fileExistsStub = false
+        vm.projectPath = "/tmp/testproj"
+        mockFileSystem.fileIsDirectoryStub = true
+
+        #expect(vm.validateProjectPath())
+    }
+
+    @Test func validateProjectPath_returnsFalseWhenNotDirectory() {
+        let mockFileSystem = MockFileSystemService()
+        let vm = ProjectViewModel(
+            folderPicker: MockFolderPickingService(),
+            fileSystem: mockFileSystem,
+            recentProjectsService: MockRecentProjectsService()
+        )
+
+        vm.projectPath = "/tmp/regularfile"
+        mockFileSystem.fileIsDirectoryStub = false
+
+        #expect(!vm.validateProjectPath())
+    }
+
+    @Test func initialRecentProjects_fromService() {
+        let mockRecent = MockRecentProjectsService()
+        let project = RecentProject(path: "/tmp/proj", name: "proj", lastOpened: Date(), bookmarkData: nil)
+        mockRecent.recentProjects = [project]
+
+        let vm = ProjectViewModel(
+            folderPicker: MockFolderPickingService(),
+            fileSystem: MockFileSystemService(),
+            recentProjectsService: mockRecent
+        )
+
+        #expect(vm.recentProjects == [project])
+    }
+}
+
+// MARK: - FileScannerViewModel Tests
+
+@MainActor
+struct FileScannerViewModelTests {
+    private func makeProjectVM(
+        fileSystem: FileSystemService = MockFileSystemService(),
+        recent: RecentProjectsService = MockRecentProjectsService()
+    ) -> ProjectViewModel {
+        ProjectViewModel(
+            folderPicker: MockFolderPickingService(),
+            fileSystem: fileSystem,
+            recentProjectsService: recent
+        )
+    }
+
+    @Test func loadFiles_whenPathDoesNotExist_setsErrorAndClearsFiles() async {
+        let mockFileSystem = MockFileSystemService()
+        let mockScanner = MockFileScanningService()
+        let projectVM = makeProjectVM(fileSystem: mockFileSystem)
+        projectVM.projectPath = "/tmp/nonexistent"
+
+        let vm = FileScannerViewModel(scanner: mockScanner, projectViewModel: projectVM)
+        mockFileSystem.fileIsDirectoryStub = false
         mockScanner.scanFilesStub = [SourceFile(url: URL(fileURLWithPath: "/tmp/a.swift"), name: "a.swift")]
 
-        vm.loadFiles()
+        await vm.loadFiles()
 
         #expect(vm.files.isEmpty)
         #expect(vm.errorMessage != nil)
         #expect(vm.errorMessage!.contains("Directory does not exist"))
     }
 
-    @Test func loadFiles_filtersByEnabledExtensions() {
+    @Test func loadFiles_successfullyLoadsAndSortsFiles() async {
         let mockFileSystem = MockFileSystemService()
         let mockScanner = MockFileScanningService()
+        let projectVM = makeProjectVM(fileSystem: mockFileSystem)
+        projectVM.projectPath = "/tmp/testproj"
 
-        let vm = FilesViewModel(
-            scanner: mockScanner,
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: mockFileSystem,
-            recentProjectsService: MockRecentProjectsService()
-        )
-
-        vm.projectPath = "/tmp/testproj"
-        mockFileSystem.fileExistsStub = true
+        let vm = FileScannerViewModel(scanner: mockScanner, projectViewModel: projectVM)
+        mockFileSystem.fileIsDirectoryStub = true
         mockFileSystem.enumeratorStub = makeTempEnumerator()
 
-        let swiftFile = SourceFile(url: URL(fileURLWithPath: "/tmp/a.swift"), name: "a.swift")
-        let javaFile = SourceFile(url: URL(fileURLWithPath: "/tmp/b.java"), name: "b.java")
-        mockScanner.scanFilesStub = [swiftFile, javaFile]
-
-        vm.loadFiles()
-
-        #expect(vm.files == [swiftFile, javaFile])
-    }
-
-    @Test func loadFiles_sortsByName() {
-        let mockFileSystem = MockFileSystemService()
-        let mockScanner = MockFileScanningService()
-
-        let vm = FilesViewModel(
-            scanner: mockScanner,
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: mockFileSystem,
-            recentProjectsService: MockRecentProjectsService()
-        )
-
-        vm.projectPath = "/tmp/testproj"
-        mockFileSystem.fileExistsStub = true
-        mockFileSystem.enumeratorStub = makeTempEnumerator()
-
-        let bFile = SourceFile(url: URL(fileURLWithPath: "/tmp/b.swift"), name: "b.swift")
-        let aFile = SourceFile(url: URL(fileURLWithPath: "/tmp/a.swift"), name: "a.swift")
+        let bFile = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/b.swift"), name: "b.swift")
+        let aFile = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/a.swift"), name: "a.swift")
         mockScanner.scanFilesStub = [bFile, aFile]
 
-        vm.loadFiles()
+        await vm.loadFiles()
 
         #expect(vm.files == [aFile, bFile])
+    }
+
+    @Test func loadFiles_resetsIsLoadingAfterCompletion() async {
+        let mockFileSystem = MockFileSystemService()
+        let mockScanner = MockFileScanningService()
+        let projectVM = makeProjectVM(fileSystem: mockFileSystem)
+        projectVM.projectPath = "/tmp/testproj"
+
+        let vm = FileScannerViewModel(scanner: mockScanner, projectViewModel: projectVM)
+        mockFileSystem.fileIsDirectoryStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
+        let file = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/a.swift"), name: "a.swift")
+        mockScanner.scanFilesStub = [file]
+
+        await vm.loadFiles()
+
+        #expect(!vm.isLoading)
+        #expect(vm.files == [file])
+    }
+
+    @Test func loadFiles_clearsPreviousError() async {
+        let mockFileSystem = MockFileSystemService()
+        let mockScanner = MockFileScanningService()
+        let projectVM = makeProjectVM(fileSystem: mockFileSystem)
+        projectVM.projectPath = "/tmp/testproj"
+
+        let vm = FileScannerViewModel(scanner: mockScanner, projectViewModel: projectVM)
+        mockFileSystem.fileIsDirectoryStub = false
+        await vm.loadFiles()
+        #expect(vm.errorMessage != nil)
+
+        mockFileSystem.fileIsDirectoryStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
+        mockScanner.scanFilesStub = [SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/a.swift"), name: "a.swift")]
+        await vm.loadFiles()
+
+        #expect(vm.errorMessage == nil)
+    }
+
+    @Test func loadFiles_whenEnumeratorIsNil_showsAccessError() async {
+        let mockFileSystem = MockFileSystemService()
+        let mockScanner = MockFileScanningService()
+        let projectVM = makeProjectVM(fileSystem: mockFileSystem)
+        projectVM.projectPath = "/tmp/testproj"
+
+        let vm = FileScannerViewModel(scanner: mockScanner, projectViewModel: projectVM)
+        mockFileSystem.fileIsDirectoryStub = true
+        mockFileSystem.enumeratorStub = nil
+
+        await vm.loadFiles()
+
+        #expect(vm.files.isEmpty)
+        #expect(vm.errorMessage != nil)
+        #expect(vm.errorMessage!.contains("Cannot read directory"))
+        #expect(vm.errorMessage!.contains("Choose Folder"))
+    }
+
+    @Test func loadFiles_whenNoMatchingFiles_setsError() async {
+        let mockFileSystem = MockFileSystemService()
+        let mockScanner = MockFileScanningService()
+        let projectVM = makeProjectVM(fileSystem: mockFileSystem)
+        projectVM.projectPath = "/tmp/testproj"
+
+        let vm = FileScannerViewModel(scanner: mockScanner, projectViewModel: projectVM)
+        mockFileSystem.fileIsDirectoryStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
+        mockScanner.scanFilesStub = []
+
+        await vm.loadFiles()
+
+        #expect(vm.files.isEmpty)
+        #expect(vm.errorMessage != nil)
+        #expect(vm.errorMessage!.contains("No source files found"))
+    }
+
+    @Test func supportedExtensions_containsExpectedList() {
+        let vm = FileScannerViewModel(
+            scanner: MockFileScanningService(),
+            projectViewModel: makeProjectVM()
+        )
+
+        #expect(vm.supportedExtensions == ["swift", "kt", "java", "dart", "js", "ts"])
+    }
+
+    @Test func enabledExtensions_defaultsToAllSupported() {
+        let vm = FileScannerViewModel(
+            scanner: MockFileScanningService(),
+            projectViewModel: makeProjectVM()
+        )
+
+        #expect(vm.enabledExtensions == Set(vm.supportedExtensions))
+    }
+}
+
+// MARK: - FileSelectionViewModel Tests
+
+@MainActor
+struct FileSelectionViewModelTests {
+    private func makeScannerVM(
+        scanner: FileScanningService = MockFileScanningService(),
+        projectVM: ProjectViewModel
+    ) -> FileScannerViewModel {
+        FileScannerViewModel(scanner: scanner, projectViewModel: projectVM)
+    }
+
+    private func makeProjectVM(
+        fileSystem: FileSystemService = MockFileSystemService()
+    ) -> ProjectViewModel {
+        ProjectViewModel(
+            folderPicker: MockFolderPickingService(),
+            fileSystem: fileSystem,
+            recentProjectsService: MockRecentProjectsService()
+        )
+    }
+
+    @Test func selectAllFiles_selectsAllFromScanner() {
+        let projectVM = makeProjectVM()
+        let scannerVM = makeScannerVM(projectVM: projectVM)
+        let vm = FileSelectionViewModel(
+            contentService: MockFileContentService(),
+            clipboard: MockClipboardService(),
+            fileScannerViewModel: scannerVM
+        )
+
+        let files = [
+            SourceFile(url: URL(fileURLWithPath: "/tmp/a.swift"), name: "a.swift"),
+            SourceFile(url: URL(fileURLWithPath: "/tmp/b.swift"), name: "b.swift")
+        ]
+        scannerVM.files = files
+        vm.selectedFiles = []
+
+        vm.selectAllFiles()
+
+        #expect(vm.selectedFiles == Set(files))
     }
 
     @Test func copySelected_combinesFileContentsWithMarkers() {
         let mockContent = MockFileContentService()
         let mockClipboard = MockClipboardService()
-        let mockFileSystem = MockFileSystemService()
+        let projectVM = makeProjectVM()
+        projectVM.projectPath = "/tmp/testproj"
+        let scannerVM = makeScannerVM(projectVM: projectVM)
 
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
+        let vm = FileSelectionViewModel(
             contentService: mockContent,
-            folderPicker: MockFolderPickingService(),
             clipboard: mockClipboard,
-            fileSystem: mockFileSystem,
-            recentProjectsService: MockRecentProjectsService()
+            fileScannerViewModel: scannerVM
         )
-
-        vm.projectPath = "/tmp/testproj"
 
         let file1 = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/a.swift"), name: "a.swift")
         let file2 = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/b.swift"), name: "b.swift")
-
-        vm.files = [file1, file2]
         vm.selectedFiles = [file1, file2]
-
         mockContent.readFileStub = "content"
 
         vm.copySelected()
@@ -667,47 +811,38 @@ struct FilesViewModelTests {
     @Test func copySelected_onlyCopiesSelectedFiles() {
         let mockContent = MockFileContentService()
         let mockClipboard = MockClipboardService()
+        let projectVM = makeProjectVM()
+        projectVM.projectPath = "/tmp/testproj"
+        let scannerVM = makeScannerVM(projectVM: projectVM)
 
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
+        let vm = FileSelectionViewModel(
             contentService: mockContent,
-            folderPicker: MockFolderPickingService(),
             clipboard: mockClipboard,
-            fileSystem: MockFileSystemService(),
-            recentProjectsService: MockRecentProjectsService()
+            fileScannerViewModel: scannerVM
         )
-
-        vm.projectPath = "/tmp/testproj"
 
         let file1 = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/a.swift"), name: "a.swift")
         let file2 = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/b.swift"), name: "b.swift")
-
-        vm.files = [file1, file2]
         vm.selectedFiles = [file1]
-
         mockContent.readFileStub = "content"
 
         vm.copySelected()
 
-        let expected = "// MARK: - a.swift\n\ncontent"
-        #expect(mockClipboard.copiedString == expected)
+        #expect(mockClipboard.copiedString == "// MARK: - a.swift\n\ncontent")
     }
 
-    @Test func copySelected_emptySelection_doesNotCallClipboard() {
+    @Test func copySelected_emptySelection_copiesEmptyString() {
         let mockClipboard = MockClipboardService()
-        let mockContent = MockFileContentService()
+        let projectVM = makeProjectVM()
+        projectVM.projectPath = "/tmp/testproj"
+        let scannerVM = makeScannerVM(projectVM: projectVM)
+        scannerVM.files = [SourceFile(url: URL(fileURLWithPath: "/tmp/a.swift"), name: "a.swift")]
 
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: mockContent,
-            folderPicker: MockFolderPickingService(),
+        let vm = FileSelectionViewModel(
+            contentService: MockFileContentService(),
             clipboard: mockClipboard,
-            fileSystem: MockFileSystemService(),
-            recentProjectsService: MockRecentProjectsService()
+            fileScannerViewModel: scannerVM
         )
-
-        vm.projectPath = "/tmp/testproj"
-        vm.files = [SourceFile(url: URL(fileURLWithPath: "/tmp/a.swift"), name: "a.swift")]
         vm.selectedFiles = []
 
         vm.copySelected()
@@ -715,184 +850,25 @@ struct FilesViewModelTests {
         #expect(mockClipboard.copiedString == "")
     }
 
-    @Test func selectAllFiles_selectsAll() {
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: MockFileSystemService(),
-            recentProjectsService: MockRecentProjectsService()
+    @Test func copySelected_whenFileReadFails_includesErrorInOutput() {
+        let mockContent = MockFileContentService()
+        let mockClipboard = MockClipboardService()
+        let projectVM = makeProjectVM()
+        projectVM.projectPath = "/tmp/testproj"
+        let scannerVM = makeScannerVM(projectVM: projectVM)
+
+        let vm = FileSelectionViewModel(
+            contentService: mockContent,
+            clipboard: mockClipboard,
+            fileScannerViewModel: scannerVM
         )
 
-        let files = [
-            SourceFile(url: URL(fileURLWithPath: "/tmp/a.swift"), name: "a.swift"),
-            SourceFile(url: URL(fileURLWithPath: "/tmp/b.swift"), name: "b.swift")
-        ]
+        let file = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/bad.swift"), name: "bad.swift")
+        vm.selectedFiles = [file]
+        mockContent.readFileError = CocoaError(.fileReadNoSuchFile)
 
-        vm.files = files
-        vm.selectedFiles = []
+        vm.copySelected()
 
-        vm.selectAllFiles()
-
-        #expect(vm.selectedFiles == Set(files))
-    }
-
-    @Test func removeRecentProject_delegatesToService() {
-        let mockRecent = MockRecentProjectsService()
-
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: MockFileSystemService(),
-            recentProjectsService: mockRecent
-        )
-
-        vm.removeRecentProject(path: "/tmp/proj")
-        #expect(mockRecent.removedPaths == ["/tmp/proj"])
-    }
-
-    @Test func supportedExtensions_containsExpectedList() {
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: MockFileSystemService(),
-            recentProjectsService: MockRecentProjectsService()
-        )
-
-        #expect(vm.supportedExtensions == ["swift", "kt", "java", "dart", "js", "ts"])
-    }
-
-    @Test func enabledExtensions_defaultsToAllSupported() {
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: MockFileSystemService(),
-            recentProjectsService: MockRecentProjectsService()
-        )
-
-        #expect(vm.enabledExtensions == Set(vm.supportedExtensions))
-    }
-
-    @Test func initialRecentProjects_fromService() {
-        let mockRecent = MockRecentProjectsService()
-        let project = RecentProject(path: "/tmp/proj", name: "proj", lastOpened: Date(), bookmarkData: nil)
-        mockRecent.recentProjects = [project]
-
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: MockFileSystemService(),
-            recentProjectsService: mockRecent
-        )
-
-        #expect(vm.recentProjects == [project])
-    }
-
-    @Test func loadFiles_clearsPreviousError() {
-        let mockFileSystem = MockFileSystemService()
-        let mockScanner = MockFileScanningService()
-
-        let vm = FilesViewModel(
-            scanner: mockScanner,
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: mockFileSystem,
-            recentProjectsService: MockRecentProjectsService()
-        )
-
-        vm.projectPath = "/tmp/testproj"
-        mockFileSystem.fileExistsStub = false
-        vm.loadFiles()
-        #expect(vm.errorMessage != nil)
-
-        mockFileSystem.fileExistsStub = true
-        mockFileSystem.enumeratorStub = makeTempEnumerator()
-        mockScanner.scanFilesStub = [SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/a.swift"), name: "a.swift")]
-        vm.loadFiles()
-
-        #expect(vm.errorMessage == nil)
-    }
-
-    @Test func loadFiles_resetsIsLoadingAfterCompletion() {
-        let mockFileSystem = MockFileSystemService()
-        let mockScanner = MockFileScanningService()
-
-        let vm = FilesViewModel(
-            scanner: mockScanner,
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: mockFileSystem,
-            recentProjectsService: MockRecentProjectsService()
-        )
-
-        vm.projectPath = "/tmp/testproj"
-        mockFileSystem.fileExistsStub = true
-        mockFileSystem.enumeratorStub = makeTempEnumerator()
-        let file = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/a.swift"), name: "a.swift")
-        mockScanner.scanFilesStub = [file]
-
-        vm.loadFiles()
-
-        #expect(vm.isLoading == false)
-        #expect(vm.files == [file])
-    }
-
-    @Test func loadFiles_whenEnumeratorIsNil_showsAccessError() {
-        let mockFileSystem = MockFileSystemService()
-        let vm = FilesViewModel(
-            scanner: MockFileScanningService(),
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: mockFileSystem,
-            recentProjectsService: MockRecentProjectsService()
-        )
-
-        vm.projectPath = "/tmp/testproj"
-        mockFileSystem.fileExistsStub = true
-        mockFileSystem.enumeratorStub = nil
-
-        vm.loadFiles()
-
-        #expect(vm.files.isEmpty)
-        #expect(vm.errorMessage != nil)
-        #expect(vm.errorMessage!.contains("Cannot read directory"))
-        #expect(vm.errorMessage!.contains("Choose Folder"))
-    }
-
-    @Test func loadFiles_whenNoMatchingFiles_setsError() {
-        let mockFileSystem = MockFileSystemService()
-        let mockScanner = MockFileScanningService()
-
-        let vm = FilesViewModel(
-            scanner: mockScanner,
-            contentService: MockFileContentService(),
-            folderPicker: MockFolderPickingService(),
-            clipboard: MockClipboardService(),
-            fileSystem: mockFileSystem,
-            recentProjectsService: MockRecentProjectsService()
-        )
-
-        vm.projectPath = "/tmp/testproj"
-        mockFileSystem.fileExistsStub = true
-        mockFileSystem.enumeratorStub = makeTempEnumerator()
-        mockScanner.scanFilesStub = []
-
-        vm.loadFiles()
-
-        #expect(vm.files.isEmpty)
-        #expect(vm.errorMessage != nil)
-        #expect(vm.errorMessage!.contains("No source files found"))
+        #expect(mockClipboard.copiedString!.contains("Error reading file"))
     }
 }
