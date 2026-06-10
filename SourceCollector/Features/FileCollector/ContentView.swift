@@ -77,7 +77,8 @@ struct ContentView: View {
         }
         .onChange(of: vm.selectedRecentProject) { _, newValue in
             if let path = newValue, path != vm.projectPath {
-                vm.openProject(path: path)
+                let project = vm.recentProjects.first { $0.path == path }
+                vm.openProject(path: path, bookmarkData: project?.bookmarkData)
             }
         }
     }

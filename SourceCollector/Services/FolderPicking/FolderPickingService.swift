@@ -1,27 +1,39 @@
 //
-//  FolderPickingService.swift
-//  SourceCollector
-//
-//  Created by Vladlen Akhtemov on 07.06.26.
-//
+ //  FolderPickingService.swift
+ //  SourceCollector
+ //
+ //  Created by Vladlen Akhtemov on 07.06.26.
+ //
 
-import Foundation
-import AppKit
+ import Foundation
+ import AppKit
 
-protocol FolderPickingService {
-    func pickFolder() -> URL?
-}
+ struct PickedFolder {
+     let url: URL
+     let bookmarkData: Data?
+ }
 
-final class DefaultFolderPickingService: FolderPickingService {
+ protocol FolderPickingService {
+     func pickFolder() -> PickedFolder?
+ }
 
-    func pickFolder() -> URL? {
+ final class DefaultFolderPickingService: FolderPickingService {
 
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Select"
+     func pickFolder() -> PickedFolder? {
+         let panel = NSOpenPanel()
+         panel.canChooseFiles = false
+         panel.canChooseDirectories = true
+         panel.allowsMultipleSelection = false
+         panel.prompt = "Select"
 
-        return panel.runModal() == .OK ? panel.url : nil
-    }
-}
+         guard panel.runModal() == .OK, let url = panel.url else { return nil }
+
+         let bookmarkData = try? url.bookmarkData(
+             options: .withSecurityScope,
+             includingResourceValuesForKeys: nil,
+             relativeTo: nil
+         )
+
+         return PickedFolder(url: url, bookmarkData: bookmarkData)
+     }
+ }

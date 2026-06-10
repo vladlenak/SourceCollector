@@ -1,22 +1,25 @@
 //
-//  FileSystemService.swift
-//  SourceCollector
-//
-//  Created by Vladlen Akhtemov on 07.06.26.
-//
+ //  FileSystemService.swift
+ //  SourceCollector
+ //
+ //  Created by Vladlen Akhtemov on 07.06.26.
+ //
 
-import Foundation
+ import Foundation
 
-protocol FileSystemService {
+ protocol FileSystemService {
 
-    func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> FileManager.DirectoryEnumerator?
-    func enumerator(at url: URL) -> FileManager.DirectoryEnumerator?
+     func enumerator(at url: URL, options: FileManager.DirectoryEnumerationOptions) -> FileManager.DirectoryEnumerator?
+     func enumerator(at url: URL) -> FileManager.DirectoryEnumerator?
 
-    func fileExists(at url: URL) -> Bool
-}
+     func fileExists(at url: URL) -> Bool
 
-extension FileSystemService {
-    func enumerator(at url: URL) -> FileManager.DirectoryEnumerator? {
-        enumerator(at: url, options: [])
-    }
-}
+     func startAccessingSecurityScopedResource(for url: URL) -> Bool
+     func stopAccessingSecurityScopedResource(for url: URL)
+ }
+
+ extension FileSystemService {
+     func enumerator(at url: URL) -> FileManager.DirectoryEnumerator? {
+         enumerator(at: url, options: [])
+     }
+ }

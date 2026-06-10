@@ -23,6 +23,13 @@ final class MockFileSystemService: FileSystemService {
     func fileExists(at url: URL) -> Bool {
         fileExistsStub
     }
+
+    func startAccessingSecurityScopedResource(for url: URL) -> Bool {
+        true
+    }
+
+    func stopAccessingSecurityScopedResource(for url: URL) {
+    }
 }
 
 /// Returns a FileManager.DirectoryEnumerator for a real temp directory.
@@ -58,22 +65,22 @@ final class MockClipboardService: ClipboardService {
 }
 
 final class MockFolderPickingService: FolderPickingService {
-    var pickFolderStub: URL?
+    var pickFolderStub: PickedFolder?
 
-    func pickFolder() -> URL? {
+    func pickFolder() -> PickedFolder? {
         pickFolderStub
     }
 }
 
 final class MockRecentProjectsService: RecentProjectsService {
     var recentProjects: [RecentProject] = []
-    var addedPaths: [String] = []
+    var addedPaths: [(String, Data?)] = []
     var removedPaths: [String] = []
 
-    func addProject(path: String) {
-        addedPaths.append(path)
+    func addProject(path: String, bookmarkData: Data?) {
+        addedPaths.append((path, bookmarkData))
         recentProjects.insert(
-            RecentProject(path: path, name: URL(fileURLWithPath: path).lastPathComponent, lastOpened: Date()),
+            RecentProject(path: path, name: URL(fileURLWithPath: path).lastPathComponent, lastOpened: Date(), bookmarkData: bookmarkData),
             at: 0
         )
     }
@@ -141,31 +148,32 @@ struct SourceFileTests {
 
 struct RecentProjectTests {
     @Test func id_returnsPath() {
-        let project = RecentProject(path: "/tmp/proj", name: "proj", lastOpened: Date())
+        let project = RecentProject(path: "/tmp/proj", name: "proj", lastOpened: Date(), bookmarkData: nil)
         #expect(project.id == "/tmp/proj")
     }
 
     @Test func codable_roundTrip() throws {
         let date = Date(timeIntervalSince1970: 1_000_000)
-        let project = RecentProject(path: "/tmp/proj", name: "proj", lastOpened: date)
+        let project = RecentProject(path: "/tmp/proj", name: "proj", lastOpened: date, bookmarkData: nil)
         let data = try JSONEncoder().encode(project)
         let decoded = try JSONDecoder().decode(RecentProject.self, from: data)
         #expect(decoded.path == project.path)
         #expect(decoded.name == project.name)
         #expect(decoded.lastOpened == project.lastOpened)
+        #expect(decoded.bookmarkData == nil)
     }
 
     @Test func hashable_equalProjects() {
         let date = Date()
-        let a = RecentProject(path: "/tmp/a", name: "a", lastOpened: date)
-        let b = RecentProject(path: "/tmp/a", name: "a", lastOpened: date)
+        let a = RecentProject(path: "/tmp/a", name: "a", lastOpened: date, bookmarkData: nil)
+        let b = RecentProject(path: "/tmp/a", name: "a", lastOpened: date, bookmarkData: nil)
         #expect(a == b)
     }
 
     @Test func hashable_differentPathsAreNotEqual() {
         let date = Date()
-        let a = RecentProject(path: "/tmp/a", name: "a", lastOpened: date)
-        let b = RecentProject(path: "/tmp/b", name: "b", lastOpened: date)
+        let a = RecentProject(path: "/tmp/a", name: "a", lastOpened: date, bookmarkData: nil)
+        let b = RecentProject(path: "/tmp/b", name: "b", lastOpened: date, bookmarkData: nil)
         #expect(a != b)
     }
 }
@@ -327,8 +335,8 @@ struct DefaultRecentProjectsServiceTests {
         let userDefaults = UserDefaults(suiteName: UUID().uuidString)!
         let service = DefaultRecentProjectsService(userDefaults: userDefaults)
 
-        service.addProject(path: "/tmp/second")
-        service.addProject(path: "/tmp/first")
+        service.addProject(path: "/tmp/second", bookmarkData: nil)
+        service.addProject(path: "/tmp/first", bookmarkData: nil)
 
         let projects = service.recentProjects
         #expect(projects.count == 2)
@@ -340,8 +348,8 @@ struct DefaultRecentProjectsServiceTests {
         let userDefaults = UserDefaults(suiteName: UUID().uuidString)!
         let service = DefaultRecentProjectsService(userDefaults: userDefaults)
 
-        service.addProject(path: "/tmp/proj")
-        service.addProject(path: "/tmp/proj")
+        service.addProject(path: "/tmp/proj", bookmarkData: nil)
+        service.addProject(path: "/tmp/proj", bookmarkData: nil)
 
         let projects = service.recentProjects
         #expect(projects.count == 1)
@@ -351,7 +359,7 @@ struct DefaultRecentProjectsServiceTests {
         let userDefaults = UserDefaults(suiteName: UUID().uuidString)!
         let service = DefaultRecentProjectsService(userDefaults: userDefaults)
 
-        service.addProject(path: "/tmp/proj")
+        service.addProject(path: "/tmp/proj", bookmarkData: nil)
         service.removeProject(path: "/tmp/proj")
         #expect(service.recentProjects.isEmpty)
     }
@@ -360,7 +368,7 @@ struct DefaultRecentProjectsServiceTests {
         let userDefaults = UserDefaults(suiteName: UUID().uuidString)!
         let service = DefaultRecentProjectsService(userDefaults: userDefaults)
 
-        service.addProject(path: "/tmp/proj")
+        service.addProject(path: "/tmp/proj", bookmarkData: nil)
         service.removeProject(path: "/tmp/nonexistent")
         #expect(service.recentProjects.count == 1)
     }
@@ -370,7 +378,7 @@ struct DefaultRecentProjectsServiceTests {
         let service = DefaultRecentProjectsService(userDefaults: userDefaults)
 
         for i in 0..<15 {
-            service.addProject(path: "/tmp/proj-\(i)")
+            service.addProject(path: "/tmp/proj-\(i)", bookmarkData: nil)
         }
 
         #expect(service.recentProjects.count == 10)
@@ -380,7 +388,7 @@ struct DefaultRecentProjectsServiceTests {
         let suiteName = UUID().uuidString
         let userDefaultsA = UserDefaults(suiteName: suiteName)!
         let serviceA = DefaultRecentProjectsService(userDefaults: userDefaultsA)
-        serviceA.addProject(path: "/tmp/proj")
+        serviceA.addProject(path: "/tmp/proj", bookmarkData: nil)
 
         let userDefaultsB = UserDefaults(suiteName: suiteName)!
         let serviceB = DefaultRecentProjectsService(userDefaults: userDefaultsB)
@@ -393,7 +401,7 @@ struct DefaultRecentProjectsServiceTests {
         let userDefaults = UserDefaults(suiteName: UUID().uuidString)!
         let service = DefaultRecentProjectsService(userDefaults: userDefaults)
 
-        service.addProject(path: "/Users/test/MyProject")
+        service.addProject(path: "/Users/test/MyProject", bookmarkData: nil)
 
         let projects = service.recentProjects
         #expect(projects[0].name == "MyProject")
@@ -421,7 +429,7 @@ struct FilesViewModelTests {
             recentProjectsService: mockRecent
         )
 
-        mockFolderPicker.pickFolderStub = URL(fileURLWithPath: "/tmp/testproj")
+        mockFolderPicker.pickFolderStub = PickedFolder(url: URL(fileURLWithPath: "/tmp/testproj"), bookmarkData: nil)
         mockFileSystem.fileExistsStub = true
         mockFileSystem.enumeratorStub = makeTempEnumerator()
 
@@ -503,7 +511,7 @@ struct FilesViewModelTests {
         mockFileSystem.enumeratorStub = makeTempEnumerator()
         vm.openProject(path: "/tmp/testproj")
 
-        #expect(mockRecent.addedPaths == ["/tmp/testproj"])
+        #expect(mockRecent.addedPaths.map { $0.0 } == ["/tmp/testproj"])
     }
 
     @Test func loadFiles_whenPathDoesNotExist_setsErrorAndClearsFiles() {
@@ -738,7 +746,7 @@ struct FilesViewModelTests {
 
     @Test func initialRecentProjects_fromService() {
         let mockRecent = MockRecentProjectsService()
-        let project = RecentProject(path: "/tmp/proj", name: "proj", lastOpened: Date())
+        let project = RecentProject(path: "/tmp/proj", name: "proj", lastOpened: Date(), bookmarkData: nil)
         mockRecent.recentProjects = [project]
 
         let vm = FilesViewModel(
