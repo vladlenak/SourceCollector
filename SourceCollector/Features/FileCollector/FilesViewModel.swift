@@ -20,6 +20,8 @@ final class FilesViewModel: ObservableObject {
     @Published var selectedFiles: Set<SourceFile> = []
     @Published var recentProjects: [RecentProject] = []
     @Published var selectedRecentProject: String?
+    @Published var isLoading = false
+    @Published var errorMessage: String?
 
     let supportedExtensions: [String] = [
         "swift",
@@ -65,6 +67,7 @@ final class FilesViewModel: ObservableObject {
 
     func openProject(path: String) {
         guard !path.isEmpty else { return }
+        errorMessage = nil
         projectPath = path
         if recentProjects.first?.path != path {
             recentProjectsService.addProject(path: path)
@@ -82,13 +85,26 @@ final class FilesViewModel: ObservableObject {
     func loadFiles() {
         let url = URL(fileURLWithPath: projectPath)
 
-        guard fileSystem.fileExists(at: url) else { return }
+        guard fileSystem.fileExists(at: url) else {
+            errorMessage = "Directory does not exist: \(projectPath)"
+            files = []
+            return
+        }
+
+        isLoading = true
+        errorMessage = nil
 
         files = scanner.scanFiles(
             at: url,
             allowedExtensions: enabledExtensions
         )
         .sorted { $0.name < $1.name }
+
+        isLoading = false
+
+        if files.isEmpty {
+            errorMessage = "No source files found for selected extensions"
+        }
     }
 
     func copySelected() {

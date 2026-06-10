@@ -2,8 +2,6 @@
 //  SourceCollectorUITestsLaunchTests.swift
 //  SourceCollectorUITests
 //
-//  Created by Vladlen Akhtemov on 07.06.26.
-//
 
 import XCTest
 
@@ -22,10 +20,10 @@ final class SourceCollectorUITestsLaunchTests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        // Insert steps here to perform after app launch but before taking a screenshot,
-        // such as logging into a test account or navigating somewhere in the app
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        XCTAssertTrue(app.staticTexts["Recent Projects"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["projectPathField"].exists)
+        XCTAssertTrue(app.buttons["Choose Folder"].exists)
+        XCTAssertTrue(app.buttons["Load"].exists)
 
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Launch Screen"

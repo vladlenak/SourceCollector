@@ -33,6 +33,7 @@ struct ContentView: View {
                 .font(.headline)
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
+                .accessibilityAddTraits(.isHeader)
 
             if vm.recentProjects.isEmpty {
                 VStack(spacing: 8) {
@@ -45,6 +46,8 @@ struct ContentView: View {
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("recentProjectsEmptyState")
             } else {
                 List(vm.recentProjects, selection: $vm.selectedRecentProject) { project in
                     HStack(spacing: 8) {
@@ -69,6 +72,7 @@ struct ContentView: View {
                     }
                 }
                 .listStyle(.plain)
+                .accessibilityIdentifier("recentProjectsList")
             }
         }
         .onChange(of: vm.selectedRecentProject) { _, newValue in
@@ -82,24 +86,47 @@ struct ContentView: View {
     private var detailView: some View {
         VStack(alignment: .leading, spacing: 12) {
 
-            // MARK: - Top controls
+            if let error = vm.errorMessage {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                    Text(error)
+                        .font(.callout)
+                    Spacer()
+                    Button {
+                        vm.errorMessage = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(.yellow.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .accessibilityIdentifier("errorBanner")
+            }
+
             HStack {
                 TextField("Path to project", text: $vm.projectPath)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .accessibilityIdentifier("projectPathField")
 
                 Button("Choose Folder") {
                     vm.openFolderPicker()
                 }
+                .accessibilityIdentifier("chooseFolderButton")
 
                 Button("Load") {
                     vm.openProject(path: vm.projectPath)
                 }
+                .accessibilityIdentifier("loadButton")
             }
 
-            // MARK: - File type filters
             VStack(alignment: .leading, spacing: 8) {
                 Text("File Types")
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
 
                 LazyVGrid(
                     columns: [
@@ -123,29 +150,61 @@ struct ContentView: View {
                             )
                         )
                         .toggleStyle(.checkbox)
+                        .accessibilityIdentifier("toggle_\(ext)")
                     }
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("fileTypeFilters")
 
-            // MARK: - File list
-            List(vm.files, id: \.self, selection: $vm.selectedFiles) { file in
-                Text(file.name)
+            if vm.files.isEmpty && !vm.projectPath.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.largeTitle)
+                        .foregroundStyle(.tertiary)
+                    Text("No files found")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Text("Try different file types or a different folder")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("filesEmptyState")
+            } else {
+                List(vm.files, id: \.self, selection: $vm.selectedFiles) { file in
+                    Text(file.name)
+                        .accessibilityLabel("\(file.name), \(file.url.path)")
+                }
+                .frame(maxHeight: .infinity)
+                .accessibilityIdentifier("fileList")
             }
-            .frame(maxHeight: .infinity)
 
-            // MARK: - Actions
             HStack {
                 Button("Select All") {
                     vm.selectAllFiles()
                 }
+                .accessibilityIdentifier("selectAllButton")
 
-                Button("Copy Selected") {
+                Spacer()
+
+                Button("Copy Selected (\(vm.selectedFiles.count))") {
                     vm.copySelected()
                 }
                 .disabled(vm.selectedFiles.isEmpty)
+                .accessibilityIdentifier("copySelectedButton")
             }
         }
         .padding(24)
+        .overlay {
+            if vm.isLoading {
+                ProgressView("Scanning files…")
+                    .padding(20)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
     }
 }
 

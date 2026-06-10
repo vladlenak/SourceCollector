@@ -2,40 +2,97 @@
 //  SourceCollectorUITests.swift
 //  SourceCollectorUITests
 //
-//  Created by Vladlen Akhtemov on 07.06.26.
-//
 
 import XCTest
 
 final class SourceCollectorUITests: XCTestCase {
 
+    private var app: XCUIApplication!
+
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
+        app = XCUIApplication()
+        app.launch()
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
-        app.launch()
+    func test_appLaunches_showsRecentProjectsHeader() throws {
+        XCTAssertTrue(app.staticTexts["Recent Projects"].exists)
+    }
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+    @MainActor
+    func test_appLaunches_showsProjectPathField() throws {
+        let pathField = app.textFields["projectPathField"]
+        XCTAssertTrue(pathField.exists)
+    }
+
+    @MainActor
+    func test_appLaunches_showsChooseFolderButton() throws {
+        XCTAssertTrue(app.buttons["Choose Folder"].exists)
+    }
+
+    @MainActor
+    func test_appLaunches_showsLoadButton() throws {
+        XCTAssertTrue(app.buttons["Load"].exists)
+    }
+
+    @MainActor
+    func test_appLaunches_showsFileTypeToggles() throws {
+        let swiftToggle = app.checkBoxes["toggle_swift"]
+        XCTAssertTrue(swiftToggle.exists)
+        XCTAssertEqual(swiftToggle.value as? Int, 1)
+
+        let ktToggle = app.checkBoxes["toggle_kt"]
+        XCTAssertTrue(ktToggle.exists)
+        XCTAssertEqual(ktToggle.value as? Int, 1)
+    }
+
+    @MainActor
+    func test_appLaunches_showsSelectAllButton() throws {
+        XCTAssertTrue(app.buttons["Select All"].exists)
+    }
+
+    @MainActor
+    func test_copySelectedButton_disabledWhenNoFiles() throws {
+        let copyButton = app.buttons["copySelectedButton"]
+        XCTAssertTrue(copyButton.exists)
+        XCTAssertFalse(copyButton.isEnabled)
+    }
+
+    @MainActor
+    func test_toggleFileType_disablesExtension() throws {
+        let swiftToggle = app.checkBoxes["toggle_swift"]
+        XCTAssertTrue(swiftToggle.exists)
+
+        swiftToggle.click()
+        XCTAssertEqual(swiftToggle.value as? Int, 0)
+
+        swiftToggle.click()
+        XCTAssertEqual(swiftToggle.value as? Int, 1)
+    }
+
+    @MainActor
+    func test_typeInPathField() throws {
+        let pathField = app.textFields["projectPathField"]
+        pathField.click()
+        pathField.typeText("/tmp/test/path")
+        XCTAssertEqual(pathField.value as? String, "/tmp/test/path")
+    }
+
+    @MainActor
+    func test_appLaunches_showsFileTypesHeader() throws {
+        XCTAssertTrue(app.staticTexts["File Types"].exists)
+    }
+
+    @MainActor
+    func test_loadButton_withEmptyPath_doesNotCrash() throws {
+        app.buttons["Load"].click()
+        let copyButton = app.buttons["copySelectedButton"]
+        XCTAssertFalse(copyButton.isEnabled)
     }
 
     @MainActor
     func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()
         }
