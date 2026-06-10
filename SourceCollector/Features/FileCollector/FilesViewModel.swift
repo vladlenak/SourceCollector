@@ -91,6 +91,12 @@ final class FilesViewModel: ObservableObject {
             return
         }
 
+        guard fileSystem.enumerator(at: url) != nil else {
+            errorMessage = "Cannot read directory contents. Use 'Choose Folder' to grant access."
+            files = []
+            return
+        }
+
         isLoading = true
         errorMessage = nil
 

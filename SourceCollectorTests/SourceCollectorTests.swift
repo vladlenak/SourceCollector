@@ -25,6 +25,14 @@ final class MockFileSystemService: FileSystemService {
     }
 }
 
+/// Returns a FileManager.DirectoryEnumerator for a real temp directory.
+/// Useful for tests that need a non-nil enumerator stub.
+func makeTempEnumerator() -> FileManager.DirectoryEnumerator? {
+    let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+    return FileManager.default.enumerator(at: tmpDir, includingPropertiesForKeys: nil)
+}
+
 final class MockFileScanningService: FileScanningService {
     var scanFilesStub: [SourceFile] = []
 
@@ -415,6 +423,7 @@ struct FilesViewModelTests {
 
         mockFolderPicker.pickFolderStub = URL(fileURLWithPath: "/tmp/testproj")
         mockFileSystem.fileExistsStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
 
         vm.openFolderPicker()
 
@@ -452,6 +461,7 @@ struct FilesViewModelTests {
         )
 
         mockFileSystem.fileExistsStub = true
+        mockFileSystem.enumeratorStub = FileManager.default.enumerator(at: URL(fileURLWithPath: "/tmp"), includingPropertiesForKeys: nil)
         let file = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/main.swift"), name: "main.swift")
         mockScanner.scanFilesStub = [file]
 
@@ -490,6 +500,7 @@ struct FilesViewModelTests {
         )
 
         mockFileSystem.fileExistsStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
         vm.openProject(path: "/tmp/testproj")
 
         #expect(mockRecent.addedPaths == ["/tmp/testproj"])
@@ -534,6 +545,7 @@ struct FilesViewModelTests {
 
         vm.projectPath = "/tmp/testproj"
         mockFileSystem.fileExistsStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
 
         let swiftFile = SourceFile(url: URL(fileURLWithPath: "/tmp/a.swift"), name: "a.swift")
         let javaFile = SourceFile(url: URL(fileURLWithPath: "/tmp/b.java"), name: "b.java")
@@ -559,6 +571,7 @@ struct FilesViewModelTests {
 
         vm.projectPath = "/tmp/testproj"
         mockFileSystem.fileExistsStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
 
         let bFile = SourceFile(url: URL(fileURLWithPath: "/tmp/b.swift"), name: "b.swift")
         let aFile = SourceFile(url: URL(fileURLWithPath: "/tmp/a.swift"), name: "a.swift")
@@ -759,6 +772,7 @@ struct FilesViewModelTests {
         #expect(vm.errorMessage != nil)
 
         mockFileSystem.fileExistsStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
         mockScanner.scanFilesStub = [SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/a.swift"), name: "a.swift")]
         vm.loadFiles()
 
@@ -780,6 +794,7 @@ struct FilesViewModelTests {
 
         vm.projectPath = "/tmp/testproj"
         mockFileSystem.fileExistsStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
         let file = SourceFile(url: URL(fileURLWithPath: "/tmp/testproj/a.swift"), name: "a.swift")
         mockScanner.scanFilesStub = [file]
 
@@ -787,6 +802,29 @@ struct FilesViewModelTests {
 
         #expect(vm.isLoading == false)
         #expect(vm.files == [file])
+    }
+
+    @Test func loadFiles_whenEnumeratorIsNil_showsAccessError() {
+        let mockFileSystem = MockFileSystemService()
+        let vm = FilesViewModel(
+            scanner: MockFileScanningService(),
+            contentService: MockFileContentService(),
+            folderPicker: MockFolderPickingService(),
+            clipboard: MockClipboardService(),
+            fileSystem: mockFileSystem,
+            recentProjectsService: MockRecentProjectsService()
+        )
+
+        vm.projectPath = "/tmp/testproj"
+        mockFileSystem.fileExistsStub = true
+        mockFileSystem.enumeratorStub = nil
+
+        vm.loadFiles()
+
+        #expect(vm.files.isEmpty)
+        #expect(vm.errorMessage != nil)
+        #expect(vm.errorMessage!.contains("Cannot read directory"))
+        #expect(vm.errorMessage!.contains("Choose Folder"))
     }
 
     @Test func loadFiles_whenNoMatchingFiles_setsError() {
@@ -804,6 +842,7 @@ struct FilesViewModelTests {
 
         vm.projectPath = "/tmp/testproj"
         mockFileSystem.fileExistsStub = true
+        mockFileSystem.enumeratorStub = makeTempEnumerator()
         mockScanner.scanFilesStub = []
 
         vm.loadFiles()
