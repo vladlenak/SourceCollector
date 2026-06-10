@@ -29,7 +29,8 @@ struct SourceCollectorApp: App {
             contentService: DefaultFileContentService(),
             folderPicker: DefaultFolderPickingService(),
             clipboard: DefaultClipboardService(),
-            fileSystem: fileSystem
+            fileSystem: fileSystem,
+            recentProjectsService: DefaultRecentProjectsService()
         )
     }
 }

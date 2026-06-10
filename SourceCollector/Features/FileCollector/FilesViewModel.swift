@@ -12,8 +12,14 @@ import Combine
 final class FilesViewModel: ObservableObject {
 
     @Published var projectPath: String = ""
-    @Published var files: [SourceFile] = []
+    @Published var files: [SourceFile] = [] {
+        didSet {
+            selectedFiles = Set(files)
+        }
+    }
     @Published var selectedFiles: Set<SourceFile> = []
+    @Published var recentProjects: [RecentProject] = []
+    @Published var selectedRecentProject: String?
 
     let supportedExtensions: [String] = [
         "swift",
@@ -32,26 +38,45 @@ final class FilesViewModel: ObservableObject {
     private let folderPicker: FolderPickingService
     private let clipboard: ClipboardService
     private let fileSystem: FileSystemService
+    private let recentProjectsService: RecentProjectsService
 
     init(
         scanner: FileScanningService,
         contentService: FileContentService,
         folderPicker: FolderPickingService,
         clipboard: ClipboardService,
-        fileSystem: FileSystemService
+        fileSystem: FileSystemService,
+        recentProjectsService: RecentProjectsService
     ) {
         self.scanner = scanner
         self.contentService = contentService
         self.folderPicker = folderPicker
         self.clipboard = clipboard
         self.fileSystem = fileSystem
+        self.recentProjectsService = recentProjectsService
         self.enabledExtensions = Set(supportedExtensions)
+        self.recentProjects = recentProjectsService.recentProjects
     }
 
     func openFolderPicker() {
         guard let url = folderPicker.pickFolder() else { return }
-        projectPath = url.path
+        openProject(path: url.path)
+    }
+
+    func openProject(path: String) {
+        guard !path.isEmpty else { return }
+        projectPath = path
+        if recentProjects.first?.path != path {
+            recentProjectsService.addProject(path: path)
+            recentProjects = recentProjectsService.recentProjects
+        }
+        selectedRecentProject = path
         loadFiles()
+    }
+
+    func removeRecentProject(path: String) {
+        recentProjectsService.removeProject(path: path)
+        recentProjects = recentProjectsService.recentProjects
     }
 
     func loadFiles() {
